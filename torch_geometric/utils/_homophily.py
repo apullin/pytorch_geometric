@@ -115,9 +115,9 @@ def homophily(
         out = torch.zeros(row.size(0), device=row.device)
         out[y[row] == y[col]] = 1.
         if batch is None:
-            return float(out.mean())
+            return float(out.mean()) if out.numel() > 0 else 0.0
         else:
-            dim_size = int(batch.max()) + 1
+            dim_size = int(batch.max()) + 1 if batch.numel() > 0 else 0
             return scatter(out, batch[col], 0, dim_size, reduce='mean')
 
     elif method == 'node':
@@ -125,17 +125,22 @@ def homophily(
         out[y[row] == y[col]] = 1.
         out = scatter(out, col, 0, dim_size=y.size(0), reduce='mean')
         if batch is None:
-            return float(out.mean())
+            return float(out.mean()) if out.numel() > 0 else 0.0
         else:
             return scatter(out, batch, dim=0, reduce='mean')
 
     elif method == 'edge_insensitive':
         assert y.dim() == 1
-        num_classes = int(y.max()) + 1
-        assert num_classes >= 2
+        has_batch = batch is not None
         batch = torch.zeros_like(y) if batch is None else batch
         num_nodes = degree(batch, dtype=torch.int64)
         num_graphs = num_nodes.numel()
+        if y.numel() == 0:
+            return torch.zeros(num_graphs, device=y.device) if has_batch else 0.0
+        num_classes = int(y.max()) + 1
+        if num_classes < 2:
+            out_z = torch.zeros(num_graphs, device=y.device)
+            return out_z if out_z.numel() > 1 else 0.0
         batch = num_classes * batch + y
 
         h = homophily(edge_index, y, batch, method='edge')

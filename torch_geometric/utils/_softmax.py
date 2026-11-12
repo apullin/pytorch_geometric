@@ -1,5 +1,6 @@
 from typing import Optional
 
+import torch
 from torch import Tensor
 
 import torch_geometric.typing
@@ -57,6 +58,9 @@ def softmax(
             and not is_compiling()):  # pragma: no cover
         return pyg_lib.ops.softmax_csr(src, ptr, dim)
 
+    orig_dtype = src.dtype
+    upcast = orig_dtype == torch.float16 or orig_dtype == torch.bfloat16
+
     if (ptr is not None and
         (ptr.dim() == 1 or (ptr.dim() > 1 and index is None) or
          (torch_geometric.typing.WITH_TORCH_SCATTER and not is_compiling()))):
@@ -72,7 +76,8 @@ def softmax(
             dim=dim,
             output_size=output_size,
         )
-        out = (src - src_max).exp()
+        shifted = (src - src_max).to(torch.float32) if upcast else (src - src_max)
+        out = shifted.exp()
         out_sum = segment(out, ptr, reduce='sum') + 1e-16
         out_sum = out_sum.repeat_interleave(
             count,
@@ -82,11 +87,12 @@ def softmax(
     elif index is not None:
         N = maybe_num_nodes(index, num_nodes)
         src_max = scatter(src.detach(), index, dim, dim_size=N, reduce='max')
-        out = src - src_max.index_select(dim, index)
-        out = out.exp()
+        shifted = src - src_max.index_select(dim, index)
+        out = shifted.to(torch.float32).exp() if upcast else shifted.exp()
         out_sum = scatter(out, index, dim, dim_size=N, reduce='sum') + 1e-16
         out_sum = out_sum.index_select(dim, index)
     else:
         raise NotImplementedError("'softmax' requires 'index' to be specified")
 
-    return out / out_sum
+    res = out / out_sum
+    return res.to(orig_dtype) if upcast else res

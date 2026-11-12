@@ -34,6 +34,9 @@ def assortativity(edge_index: Adj) -> float:
         assert isinstance(edge_index, Tensor)
         row, col = edge_index
 
+    if row.numel() == 0:
+        return 0.0
+
     device = row.device
     out_deg = degree(row, dtype=torch.long)
     in_deg = degree(col, dtype=torch.long)
@@ -62,5 +65,8 @@ def assortativity(edge_index: Adj) -> float:
     varb = (b * x**2).sum() - ((b * x).sum())**2
     xy = torch.outer(x, y)
     ab = torch.outer(a, b)
-    out = (xy * (M - ab)).sum() / (vara * varb).sqrt()
+    denom = (vara * varb).sqrt()
+    if float(denom) == 0.0:
+        return 0.0
+    out = (xy * (M - ab)).sum() / denom
     return out.item()

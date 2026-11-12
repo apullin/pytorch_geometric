@@ -307,3 +307,14 @@ def test_get_self_loop_attr():
     edge_attr = torch.tensor([[1.0, 0.0], [0.0, 1.0], [0.5, 1.0]])
     full_loop_attr = get_self_loop_attr(edge_index, edge_attr)
     assert full_loop_attr.equal(torch.tensor([[0.5, 1.0], [0.0, 0.0]]))
+
+
+def test_add_remaining_self_loops_duplicate_order_invariance():
+    ei1 = torch.tensor([[0, 0, 0], [0, 0, 1]])
+    ew1 = torch.tensor([0.2, 5.0, 1.0])
+    ei2 = torch.tensor([[0, 0, 0], [0, 1, 0]])
+    ew2 = torch.tensor([5.0, 1.0, 0.2])
+    _, out_w1 = add_remaining_self_loops(ei1, ew1)
+    _, out_w2 = add_remaining_self_loops(ei2, ew2)
+    assert torch.allclose(out_w1, out_w2)
+

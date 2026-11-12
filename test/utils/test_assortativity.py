@@ -28,3 +28,7 @@ def test_assortativity():
         adj = SparseTensor.from_edge_index(edge_index, sparse_sizes=[6, 6])
         out = assortativity(adj)
         assert pytest.approx(out, abs=1e-5) == -1.0
+
+    assert assortativity(torch.empty((2, 0), dtype=torch.long)) == 0.0
+    assert assortativity(torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]])) == 0.0
+

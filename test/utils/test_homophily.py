@@ -31,3 +31,9 @@ def test_homophily():
     if torch_geometric.typing.WITH_TORCH_SPARSE:
         assert pytest.approx(homophily(adj, y, method=method)) == 0.1999999
     assert homophily(edge_index, y, batch, method).tolist() == [0., 0.]
+
+    empty_ei = torch.empty((2, 0), dtype=torch.long)
+    assert homophily(empty_ei, torch.tensor([0, 1]), method='edge') == 0.0
+    assert homophily(torch.tensor([[0, 1], [1, 2]]), torch.tensor([0, 0, 0]),
+                     method='edge_insensitive') == 0.0
+

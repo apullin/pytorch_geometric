@@ -150,7 +150,10 @@ class HeteroLayerNorm(torch.nn.Module):
         device: Optional[torch.device] = None,
     ):
         super().__init__()
-        assert mode == 'node'
+        if mode != 'node':
+            raise ValueError(
+                f"Unsupported mode '{mode}' in '{self.__class__.__name__}' "
+                f"(expected 'node')")
 
         self.in_channels = in_channels
         self.num_types = num_types

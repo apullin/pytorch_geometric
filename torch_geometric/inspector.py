@@ -430,6 +430,8 @@ def eval_type(value: Any, _globals: Dict[str, Any]) -> Type:
     r"""Returns the type hint of a string."""
     if isinstance(value, str):
         value = typing.ForwardRef(value)
+    if sys.version_info >= (3, 13):
+        return typing._eval_type(value, _globals, None, type_params=())  # type: ignore
     return typing._eval_type(value, _globals, None)  # type: ignore
 
 

@@ -37,14 +37,16 @@ def segment(src: Tensor, ptr: Tensor, reduce: str = 'sum') -> Tensor:
 def _torch_segment(src: Tensor, ptr: Tensor, reduce: str = 'sum') -> Tensor:
     if not torch_geometric.typing.WITH_PT20:
         raise ImportError("'segment' requires the 'torch-scatter' package")
-    if ptr.dim() > 1:
-        raise ImportError("'segment' in an arbitrary dimension "
-                          "requires the 'torch-scatter' package")
+
+    axis = ptr.dim() - 1
+    if axis > 0:
+        ptr = ptr.expand(list(src.shape[:axis]) + [-1]).contiguous()
 
     if reduce == 'min' or reduce == 'max':
         reduce = f'a{reduce}'  # `amin` or `amax`
     initial = 0 if reduce == 'mean' else None
-    out = torch._segment_reduce(src, reduce, offsets=ptr, initial=initial)
+    out = torch._segment_reduce(src, reduce, offsets=ptr, axis=axis,
+                                initial=initial)
     if reduce == 'amin' or reduce == 'amax':
         out = torch.where(out.isinf(), 0, out)
     return out

@@ -566,3 +566,23 @@ def test_to_hetero_lazy_cuda():
     for out in out_dict.values():
         assert out.is_cuda
         assert out.size(-1) == 2
+
+
+def test_to_hetero_source_only_node_type():
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = SAGEConv((-1, -1), 8)
+
+        def forward(self, x, edge_index):
+            return self.conv(x, edge_index).relu()
+
+    with pytest.warns(UserWarning, match="do not get updated"):
+        hetero = to_hetero(Model(), (['author', 'paper'], [('author', 'writes', 'paper')]))
+    out = hetero(
+        {'author': torch.randn(4, 8), 'paper': torch.randn(6, 8)},
+        {('author', 'writes', 'paper'): torch.tensor([[0, 1], [2, 3]])},
+    )
+    assert out['paper'].size() == (6, 8)
+    assert out['author'] is None
+

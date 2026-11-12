@@ -6,7 +6,8 @@ from torch_geometric.profile import benchmark
 from torch_geometric.utils import softmax
 
 CALCULATION_VIA_PTR_AVAILABLE = (torch_geometric.typing.WITH_SOFTMAX
-                                 or torch_geometric.typing.WITH_TORCH_SCATTER)
+                                 or torch_geometric.typing.WITH_TORCH_SCATTER
+                                 or torch_geometric.typing.WITH_PT20)
 
 
 def test_softmax():
@@ -71,6 +72,15 @@ def test_softmax_dim():
     else:
         with pytest.raises(ImportError, match="requires the 'torch-scatter'"):
             softmax(src, ptr=ptr, dim=1)
+
+
+def test_softmax_fp16_large_group():
+    src = torch.zeros(70_000, 2, dtype=torch.float16)
+    index = torch.zeros(70_000, dtype=torch.long)
+    out = softmax(src, index=index, num_nodes=1)
+    assert torch.isfinite(out).all()
+    assert torch.allclose(out.float().sum(dim=0), torch.ones(2), atol=1e-2)
+
 
 
 if __name__ == '__main__':

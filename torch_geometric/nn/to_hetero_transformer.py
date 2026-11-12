@@ -291,7 +291,10 @@ class ToHeteroTransformer(Transformer):
         # Add calls to node type-wise or edge type-wise modules.
         self.graph.inserting_after(node)
         for key in self.metadata[int(self.is_edge_level(node))]:
-            args, kwargs = self.map_args_kwargs(node, key)
+            try:
+                args, kwargs = self.map_args_kwargs(node, key)
+            except ValueError:
+                continue
             out = self.graph.create_node('call_module',
                                          target=f'{target}.{key2str(key)}',
                                          args=args, kwargs=kwargs,
@@ -305,7 +308,10 @@ class ToHeteroTransformer(Transformer):
         # Add calls to node type-wise or edge type-wise methods.
         self.graph.inserting_after(node)
         for key in self.metadata[int(self.is_edge_level(node))]:
-            args, kwargs = self.map_args_kwargs(node, key)
+            try:
+                args, kwargs = self.map_args_kwargs(node, key)
+            except ValueError:
+                continue
             out = self.graph.create_node('call_method', target=target,
                                          args=args, kwargs=kwargs,
                                          name=f'{name}__{key2str(key)}')
@@ -318,7 +324,10 @@ class ToHeteroTransformer(Transformer):
         # Add calls to node type-wise or edge type-wise functions.
         self.graph.inserting_after(node)
         for key in self.metadata[int(self.is_edge_level(node))]:
-            args, kwargs = self.map_args_kwargs(node, key)
+            try:
+                args, kwargs = self.map_args_kwargs(node, key)
+            except ValueError:
+                continue
             out = self.graph.create_node('call_function', target=target,
                                          args=args, kwargs=kwargs,
                                          name=f'{name}__{key2str(key)}')
@@ -357,10 +366,14 @@ class ToHeteroTransformer(Transformer):
 
     def init_submodule(self, module: Module, target: str) -> Module:
         # Replicate each module for each node type or edge type.
-        has_node_level_target = bool(
-            self.find_by_target(f'{target}.{key2str(self.metadata[0][0])}'))
-        has_edge_level_target = bool(
-            self.find_by_target(f'{target}.{key2str(self.metadata[1][0])}'))
+        has_node_level_target = any(
+            bool(self.find_by_target(f'{target}.{key2str(k)}'))
+            for k in self.metadata[0]
+        )
+        has_edge_level_target = any(
+            bool(self.find_by_target(f'{target}.{key2str(k)}'))
+            for k in self.metadata[1]
+        )
 
         if not has_node_level_target and not has_edge_level_target:
             return module
