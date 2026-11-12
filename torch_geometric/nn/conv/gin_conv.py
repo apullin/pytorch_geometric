@@ -140,6 +140,8 @@ class GINEConv(MessagePassing):
         - **output:** node features :math:`(|\mathcal{V}|, F_{out})` or
           :math:`(|\mathcal{V}_t|, F_{out})` if bipartite
     """
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def __init__(self, nn: torch.nn.Module, eps: float = 0.,
                  train_eps: bool = False, edge_dim: Optional[int] = None,
                  **kwargs):

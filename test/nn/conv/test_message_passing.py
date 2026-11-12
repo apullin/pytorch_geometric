@@ -760,3 +760,38 @@ def test_my_optional_edge_attr_conv():
 
     out = conv(x, edge_index)
     assert out.size() == (4, 8)
+
+
+def test_decomposed_layers_tuple_and_guard():
+    from torch_geometric.nn import (
+        AGNNConv,
+        GATConv,
+        GATv2Conv,
+        GINConv,
+        SAGEConv,
+        TransformerConv,
+    )
+
+    x = torch.randn(6, 8)
+    edge_index = torch.tensor([[0, 1, 2, 3], [1, 2, 0, 1]])
+
+    for conv1, conv2 in [
+        (SAGEConv(8, 8, decomposed_layers=1), SAGEConv(8, 8, decomposed_layers=2)),
+        (GATConv(8, 4, heads=2, decomposed_layers=1), GATConv(8, 4, heads=2, decomposed_layers=2)),
+        (GATv2Conv(8, 4, heads=2, decomposed_layers=1), GATv2Conv(8, 4, heads=2, decomposed_layers=2)),
+        (
+            GINConv(torch.nn.Linear(8, 8), decomposed_layers=1),
+            GINConv(torch.nn.Linear(8, 8), decomposed_layers=2),
+        ),
+    ]:
+        conv1.eval()
+        conv2.eval()
+        conv2.load_state_dict(conv1.state_dict())
+        assert torch.allclose(conv1(x, edge_index), conv2(x, edge_index), atol=1e-5)
+
+    with pytest.raises(ValueError, match="does not support feature decomposition"):
+        AGNNConv(decomposed_layers=2)
+
+    with pytest.raises(ValueError, match="does not support feature decomposition"):
+        TransformerConv(8, 4, heads=2, decomposed_layers=2)
+

@@ -106,6 +106,7 @@ class MessagePassing(torch.nn.Module):
     # Supports `message_and_aggregate` via `EdgeIndex`.
     # TODO Remove once migration is finished.
     SUPPORTS_FUSED_EDGE_INDEX: Final[bool] = False
+    SUPPORTS_DECOMPOSED_LAYERS: bool = True
 
     def __init__(
         self,
@@ -500,14 +501,43 @@ class MessagePassing(torch.nn.Module):
             if decomposed_layers > 1:
                 user_args = self._user_args
                 decomp_args = {a[:-2] for a in user_args if a[-2:] == '_j'}
-                decomp_kwargs = {
-                    a: kwargs[a].chunk(decomposed_layers, -1)
-                    for a in decomp_args
-                }
-                decomp_out = []
+                decomp_kwargs: Dict[str, List[Any]] = {}
+                for a in decomp_args:
+                    val = kwargs[a]
+                    if isinstance(val, Tensor):
+                        decomp_kwargs[a] = list(val.chunk(decomposed_layers, -1))
+                    elif isinstance(val, (tuple, list)):
+                        elem_chunks = [
+                            list(v.chunk(decomposed_layers, -1))
+                            if isinstance(v, Tensor) else None
+                            for v in val
+                        ]
+                        n_chunks = min(
+                            (len(c) for c in elem_chunks if c is not None),
+                            default=decomposed_layers,
+                        )
+                        decomp_kwargs[a] = [
+                            type(val)(
+                                c[idx] if c is not None else val[pos]
+                                for pos, c in enumerate(elem_chunks)
+                            )
+                            for idx in range(n_chunks)
+                        ]
+                    else:
+                        decomp_kwargs[a] = [val] * decomposed_layers
 
-            for i in range(decomposed_layers):
-                if decomposed_layers > 1:
+                num_decomp = min(
+                    (len(v) for v in decomp_kwargs.values()),
+                    default=1,
+                )
+                decomp_out = []
+            else:
+                num_decomp = 1
+
+            orig_kwargs = dict(kwargs) if num_decomp > 1 else kwargs
+            for i in range(num_decomp):
+                if num_decomp > 1:
+                    kwargs = dict(orig_kwargs)
                     for arg in decomp_args:
                         kwargs[arg] = decomp_kwargs[arg][i]
 
@@ -549,10 +579,10 @@ class MessagePassing(torch.nn.Module):
                     'update', coll_dict)
                 out = self.update(out, **update_kwargs)
 
-                if decomposed_layers > 1:
+                if num_decomp > 1:
                     decomp_out.append(out)
 
-            if decomposed_layers > 1:
+            if num_decomp > 1:
                 out = torch.cat(decomp_out, dim=-1)
 
         for hook in self._propagate_forward_hooks.values():
@@ -686,6 +716,11 @@ class MessagePassing(torch.nn.Module):
         if torch.jit.is_scripting():
             raise ValueError("Inference decomposition of message passing "
                              "modules is only supported on the Python module")
+
+        if decomposed_layers > 1 and not self.SUPPORTS_DECOMPOSED_LAYERS:
+            raise ValueError(
+                f"'{self.__class__.__name__}' does not support feature "
+                f"decomposition (got decomposed_layers={decomposed_layers})")
 
         if decomposed_layers == self._decomposed_layers:
             return  # Abort early if nothing to do.

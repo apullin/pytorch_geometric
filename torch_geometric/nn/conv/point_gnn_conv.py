@@ -47,6 +47,8 @@ class PointGNNConv(MessagePassing):
           edge indices :math:`(2, |\mathcal{E}|)`,
         - **output:** node features :math:`(|\mathcal{V}|, F_{in})`
     """
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def __init__(
         self,
         mlp_h: torch.nn.Module,

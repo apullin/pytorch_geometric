@@ -41,6 +41,8 @@ class AGNNConv(MessagePassing):
           edge indices :math:`(2, |\mathcal{E}|)`
         - **output:** node features :math:`(|\mathcal{V}|, F)`
     """
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def __init__(self, requires_grad: bool = True, add_self_loops: bool = True,
                  **kwargs):
         kwargs.setdefault('aggr', 'add')

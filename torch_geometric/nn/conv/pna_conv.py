@@ -88,6 +88,8 @@ class PNAConv(MessagePassing):
           edge features :math:`(|\mathcal{E}|, D)` *(optional)*
         - **output:** node features :math:`(|\mathcal{V}|, F_{out})`
     """
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def __init__(
         self,
         in_channels: int,

@@ -54,6 +54,8 @@ class ResGatedGraphConv(MessagePassing):
         - **outputs:** node features :math:`(|\mathcal{V}|, F_{out})` or
           :math:`(|\mathcal{V_t}|, F_{out})` if bipartite
     """
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def __init__(
         self,
         in_channels: Union[int, Tuple[int, int]],

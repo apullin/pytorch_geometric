@@ -70,6 +70,8 @@ class GMMConv(MessagePassing):
         - **output:** node features :math:`(|\mathcal{V}|, F_{out})` or
           :math:`(|\mathcal{V}_t|, F_{out})` if bipartite
     """
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def __init__(self, in_channels: Union[int, Tuple[int, int]],
                  out_channels: int, dim: int, kernel_size: int,
                  separate_gaussians: bool = False, aggr: str = 'mean',

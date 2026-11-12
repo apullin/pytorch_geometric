@@ -171,6 +171,8 @@ class RGATConv(MessagePassing):
 
     _alpha: OptTensor
 
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def __init__(
         self,
         in_channels: int,

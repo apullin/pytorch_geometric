@@ -230,6 +230,8 @@ class DNAConv(MessagePassing):
     _cached_edge_index: Optional[OptPairTensor]
     _cached_adj_t: Optional[SparseTensor]
 
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def __init__(self, channels: int, heads: int = 1, groups: int = 1,
                  dropout: float = 0., cached: bool = False,
                  normalize: bool = True, add_self_loops: bool = True,

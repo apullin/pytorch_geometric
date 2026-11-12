@@ -41,6 +41,8 @@ class EdgeConv(MessagePassing):
         - **output:** node features :math:`(|\mathcal{V}|, F_{out})` or
           :math:`(|\mathcal{V}_t|, F_{out})` if bipartite
     """
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def __init__(self, nn: Callable, aggr: str = 'max', **kwargs):
         super().__init__(aggr=aggr, **kwargs)
         self.nn = nn

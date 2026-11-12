@@ -301,6 +301,8 @@ class RGCNConv(MessagePassing):
 
 class FastRGCNConv(RGCNConv):
     r"""See :class:`RGCNConv`."""
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def forward(self, x: Union[OptTensor, Tuple[OptTensor, Tensor]],
                 edge_index: Adj, edge_type: OptTensor = None):
 

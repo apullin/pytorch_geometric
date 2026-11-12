@@ -74,6 +74,8 @@ class PointTransformerConv(MessagePassing):
         - **output:** node features :math:`(|\mathcal{V}|, F_{out})` or
           :math:`(|\mathcal{V}_t|, F_{out})` if bipartite
     """
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
+
     def __init__(self, in_channels: Union[int, Tuple[int, int]],
                  out_channels: int, pos_nn: Optional[Callable] = None,
                  attn_nn: Optional[Callable] = None,

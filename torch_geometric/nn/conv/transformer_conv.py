@@ -96,6 +96,7 @@ class TransformerConv(MessagePassing):
             :class:`torch_geometric.nn.conv.MessagePassing`.
     """
     _alpha: OptTensor
+    SUPPORTS_DECOMPOSED_LAYERS: bool = False
 
     def __init__(
         self,
