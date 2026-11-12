@@ -24,7 +24,7 @@ def test_attentional_aggregation(dim):
     assert out.size() == (3, channels) if dim == 2 else (2, 3, channels)
 
     if (not torch_geometric.typing.WITH_TORCH_SCATTER
-            and (dim == 3 or not torch_geometric.typing.WITH_PT20)):
+            and not torch_geometric.typing.WITH_PT20):
         with pytest.raises(ImportError, match="requires the 'torch-scatter'"):
             aggr(x, ptr=ptr)
     else:
