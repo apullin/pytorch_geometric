@@ -85,6 +85,41 @@ def assert_sorted(func: Callable) -> Callable:
     return wrapper
 
 
+@torch._dynamo.disable
+def _make_index_wrapper(
+    cls: Type['Index'],
+    data: Tensor,
+    dim_size: Optional[int],
+    is_sorted: bool,
+    indptr: Optional[Tensor],
+) -> 'Index':
+    out = Tensor._make_wrapper_subclass(
+        cls,
+        size=data.size(),
+        strides=data.stride(),
+        dtype=data.dtype,
+        device=data.device,
+        layout=data.layout,
+        requires_grad=False,
+    )
+    assert isinstance(out, Index)
+
+    # Attach metadata:
+    out._data = data
+    out._dim_size = dim_size
+    out._is_sorted = is_sorted
+    out._indptr = indptr
+
+    if isinstance(data, cls):
+        out._data = data._data
+
+        # Reset metadata if cache is invalidated:
+        if dim_size is not None and dim_size != data.dim_size:
+            out._indptr = None
+
+    return out
+
+
 class Index(Tensor):
     r"""A one-dimensional :obj:`index` tensor with additional (meta)data
     attached.
@@ -182,31 +217,7 @@ class Index(Tensor):
         assert_one_dimensional(data)
         assert_contiguous(data)
 
-        out = Tensor._make_wrapper_subclass(
-            cls,
-            size=data.size(),
-            strides=data.stride(),
-            dtype=data.dtype,
-            device=data.device,
-            layout=data.layout,
-            requires_grad=False,
-        )
-        assert isinstance(out, Index)
-
-        # Attach metadata:
-        out._data = data
-        out._dim_size = dim_size
-        out._is_sorted = is_sorted
-        out._indptr = indptr
-
-        if isinstance(data, cls):
-            out._data = data._data
-
-            # Reset metadata if cache is invalidated:
-            if dim_size is not None and dim_size != data.dim_size:
-                out._indptr = None
-
-        return out
+        return _make_index_wrapper(cls, data, dim_size, is_sorted, indptr)
 
     # Validation ##############################################################
 
@@ -334,13 +345,18 @@ class Index(Tensor):
         if self._indptr is not None:
             attrs.append('_indptr')
 
+        dim_size = None if isinstance(self._dim_size, torch.SymInt) else self._dim_size
         ctx = (
-            self._dim_size,
+            dim_size,
             self._is_sorted,
             self._cat_metadata,
         )
 
         return attrs, ctx
+
+    def _stable_hash_for_caching(self) -> str:
+        dim_size = None if isinstance(self._dim_size, torch.SymInt) else self._dim_size
+        return f"Index(shape={tuple(self._data.shape)},dtype={self._data.dtype},device={self._data.device},dim_size={dim_size},sorted={self._is_sorted})"
 
     @staticmethod
     def __tensor_unflatten__(
@@ -740,11 +756,17 @@ def _add(
 
 @implements(aten.add_.Tensor)
 def add_(
-    input: Index,
+    input: Union[Tensor, Index],
     other: Union[int, Tensor, Index],
     *,
     alpha: int = 1,
-) -> Index:
+) -> Union[Tensor, Index]:
+    if not isinstance(input, Index):
+        return aten.add_.Tensor(
+            input,
+            other._data if isinstance(other, Index) else other,
+            alpha=alpha,
+        )
 
     dim_size = input.dim_size
     is_sorted = input.is_sorted
@@ -761,12 +783,14 @@ def add_(
 
     if isinstance(other, int):
         if dim_size is not None:
-            input._dim_size = dim_size + alpha * other
+            new_size = dim_size + alpha * other
+            input._dim_size = new_size if isinstance(new_size, torch.SymInt) or new_size >= 0 else None
         input._is_sorted = is_sorted
 
     elif isinstance(other, Index):
         if dim_size is not None and other.dim_size is not None:
-            input._dim_size = dim_size + alpha * other.dim_size
+            new_size = dim_size + alpha * other.dim_size
+            input._dim_size = new_size if isinstance(new_size, torch.SymInt) or new_size >= 0 else None
 
     return input
 
@@ -808,11 +832,17 @@ def _sub(
 
 @implements(aten.sub_.Tensor)
 def sub_(
-    input: Index,
+    input: Union[Tensor, Index],
     other: Union[int, Tensor, Index],
     *,
     alpha: int = 1,
-) -> Index:
+) -> Union[Tensor, Index]:
+    if not isinstance(input, Index):
+        return aten.sub_.Tensor(
+            input,
+            other._data if isinstance(other, Index) else other,
+            alpha=alpha,
+        )
 
     dim_size = input.dim_size
     is_sorted = input.is_sorted
@@ -829,7 +859,8 @@ def sub_(
 
     if isinstance(other, int):
         if dim_size is not None:
-            input._dim_size = dim_size - alpha * other
+            new_size = dim_size - alpha * other
+            input._dim_size = new_size if isinstance(new_size, torch.SymInt) or new_size >= 0 else None
         input._is_sorted = is_sorted
 
     return input

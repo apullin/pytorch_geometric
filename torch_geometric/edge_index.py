@@ -150,6 +150,52 @@ def assert_sorted(func: Callable) -> Callable:
     return wrapper
 
 
+@torch._dynamo.disable
+def _make_edge_index_wrapper(
+    cls: Type['EdgeIndex'],
+    data: Tensor,
+    sparse_size: Tuple[Optional[int], Optional[int]],
+    sort_order: Optional[Union[str, SortOrder]],
+    is_undirected: bool,
+    indptr: Optional[Tensor],
+) -> 'EdgeIndex':
+    out = Tensor._make_wrapper_subclass(
+        cls,
+        size=data.size(),
+        strides=data.stride(),
+        dtype=data.dtype,
+        device=data.device,
+        layout=data.layout,
+        requires_grad=False,
+    )
+    assert isinstance(out, EdgeIndex)
+
+    # Attach metadata:
+    out._data = data
+    out._sparse_size = sparse_size
+    out._sort_order = None if sort_order is None else SortOrder(sort_order)
+    out._is_undirected = is_undirected
+    out._indptr = indptr
+
+    if isinstance(data, cls):  # If passed `EdgeIndex`, inherit metadata:
+        out._data = data._data
+        out._T_perm = data._T_perm
+        out._T_index = data._T_index
+        out._T_indptr = data._T_indptr
+        out._value = out._value
+
+        # Reset metadata if cache is invalidated:
+        num_rows = sparse_size[0]
+        if num_rows is not None and num_rows != data.sparse_size(0):
+            out._indptr = None
+
+        num_cols = sparse_size[1]
+        if num_cols is not None and num_cols != data.sparse_size(1):
+            out._T_indptr = None
+
+    return out
+
+
 class EdgeIndex(Tensor):
     r"""A COO :obj:`edge_index` tensor with additional (meta)data attached.
 
@@ -325,41 +371,9 @@ class EdgeIndex(Tensor):
             elif sparse_size[0] is None and sparse_size[1] is not None:
                 sparse_size = (sparse_size[1], sparse_size[1])
 
-        out = Tensor._make_wrapper_subclass(
-            cls,
-            size=data.size(),
-            strides=data.stride(),
-            dtype=data.dtype,
-            device=data.device,
-            layout=data.layout,
-            requires_grad=False,
+        return _make_edge_index_wrapper(
+            cls, data, sparse_size, sort_order, is_undirected, indptr
         )
-        assert isinstance(out, EdgeIndex)
-
-        # Attach metadata:
-        out._data = data
-        out._sparse_size = sparse_size
-        out._sort_order = None if sort_order is None else SortOrder(sort_order)
-        out._is_undirected = is_undirected
-        out._indptr = indptr
-
-        if isinstance(data, cls):  # If passed `EdgeIndex`, inherit metadata:
-            out._data = data._data
-            out._T_perm = data._T_perm
-            out._T_index = data._T_index
-            out._T_indptr = data._T_indptr
-            out._value = out._value
-
-            # Reset metadata if cache is invalidated:
-            num_rows = sparse_size[0]
-            if num_rows is not None and num_rows != data.sparse_size(0):
-                out._indptr = None
-
-            num_cols = sparse_size[1]
-            if num_cols is not None and num_cols != data.sparse_size(1):
-                out._T_indptr = None
-
-        return out
 
     # Validation ##############################################################
 
@@ -1155,14 +1169,29 @@ class EdgeIndex(Tensor):
         if self._T_indptr is not None:
             attrs.append('_T_indptr')
 
+        sparse_size = tuple(
+            None if isinstance(s, torch.SymInt) else s
+            for s in self._sparse_size
+        )
         ctx = (
-            self._sparse_size,
+            sparse_size,
             self._sort_order,
             self._is_undirected,
             self._cat_metadata,
         )
 
         return attrs, ctx
+
+    def _stable_hash_for_caching(self) -> str:
+        sparse_size = tuple(
+            None if isinstance(s, torch.SymInt) else s
+            for s in self._sparse_size
+        )
+        return (
+            f"EdgeIndex(shape={tuple(self._data.shape)},dtype={self._data.dtype},"
+            f"device={self._data.device},sparse_size={sparse_size},"
+            f"sort_order={self._sort_order},undirected={self._is_undirected})"
+        )
 
     @staticmethod
     def __tensor_unflatten__(
@@ -1398,7 +1427,7 @@ def _cat(
     # Post-process `sparse_size`:
     total_num_rows: Optional[int] = 0
     for num_rows, _ in sparse_size_list:
-        if num_rows is None:
+        if num_rows is None or isinstance(num_rows, torch.SymInt):
             total_num_rows = None
             break
         assert isinstance(total_num_rows, int)
@@ -1406,7 +1435,7 @@ def _cat(
 
     total_num_cols: Optional[int] = 0
     for _, num_cols in sparse_size_list:
-        if num_cols is None:
+        if num_cols is None or isinstance(num_cols, torch.SymInt):
             total_num_cols = None
             break
         assert isinstance(total_num_cols, int)
@@ -1500,10 +1529,7 @@ def _slice(
         if step >= 0:
             out._sort_order = input._sort_order
         else:
-            if input._sort_order == SortOrder.ROW:
-                out._sort_order = SortOrder.COL
-            elif input._sort_order == SortOrder.COL:
-                out._sort_order = SortOrder.ROW
+            out._sort_order = None
 
     return out
 
@@ -1578,16 +1604,28 @@ def _unbind(
     return aten.unbind.int(input._data, dim)
 
 
+def _sanitize_sparse_size(
+    size: Tuple[Optional[int], ...],
+) -> Tuple[Optional[int], Optional[int]]:
+    assert len(size) == 2
+    s0, s1 = size[0], size[1]
+    if s0 is not None and not isinstance(s0, torch.SymInt) and s0 < 0:
+        s0 = None
+    if s1 is not None and not isinstance(s1, torch.SymInt) and s1 < 0:
+        s1 = None
+    return (s0, s1)
+
+
 @implements(aten.add.Tensor)
 def _add(
-    input: EdgeIndex,
+    input: Union[int, Tensor, EdgeIndex],
     other: Union[int, Tensor, EdgeIndex],
     *,
     alpha: int = 1,
 ) -> Union[EdgeIndex, Tensor]:
 
     out = aten.add.Tensor(
-        input._data,
+        input._data if isinstance(input, EdgeIndex) else input,
         other._data if isinstance(other, EdgeIndex) else other,
         alpha=alpha,
     )
@@ -1596,23 +1634,29 @@ def _add(
         return out
     if out.dim() != 2 or out.size(0) != 2:
         return out
+    if not is_compiling() and not torch.jit.is_tracing() and out.numel() > 0 and int(out.min()) < 0:
+        return out
+
+    if not isinstance(input, EdgeIndex) and isinstance(other, EdgeIndex) and alpha == 1:
+        input, other = other, input
 
     out = EdgeIndex(out)
+
+    if not isinstance(input, EdgeIndex):
+        return out
 
     if isinstance(other, Tensor) and other.numel() <= 1:
         other = int(other)
 
     if isinstance(other, int):
-        size = maybe_add(input._sparse_size, other, alpha)
-        assert len(size) == 2
+        size = _sanitize_sparse_size(maybe_add(input._sparse_size, other, alpha))
         out._sparse_size = size
         out._sort_order = input._sort_order
         out._is_undirected = input.is_undirected
         out._T_perm = input._T_perm
 
     elif isinstance(other, Tensor) and other.size() == (2, 1):
-        size = maybe_add(input._sparse_size, other.view(-1).tolist(), alpha)
-        assert len(size) == 2
+        size = _sanitize_sparse_size(maybe_add(input._sparse_size, other.view(-1).tolist(), alpha))
         out._sparse_size = size
         out._sort_order = input._sort_order
         if torch.equal(other[0], other[1]):
@@ -1620,8 +1664,7 @@ def _add(
         out._T_perm = input._T_perm
 
     elif isinstance(other, EdgeIndex):
-        size = maybe_add(input._sparse_size, other._sparse_size, alpha)
-        assert len(size) == 2
+        size = _sanitize_sparse_size(maybe_add(input._sparse_size, other._sparse_size, alpha))
         out._sparse_size = size
 
     return out
@@ -1629,11 +1672,17 @@ def _add(
 
 @implements(aten.add_.Tensor)
 def add_(
-    input: EdgeIndex,
+    input: Union[Tensor, EdgeIndex],
     other: Union[int, Tensor, EdgeIndex],
     *,
     alpha: int = 1,
-) -> EdgeIndex:
+) -> Union[Tensor, EdgeIndex]:
+    if not isinstance(input, EdgeIndex):
+        return aten.add_.Tensor(
+            input,
+            other._data if isinstance(other, EdgeIndex) else other,
+            alpha=alpha,
+        )
 
     sparse_size = input._sparse_size
     sort_order = input._sort_order
@@ -1651,16 +1700,14 @@ def add_(
         other = int(other)
 
     if isinstance(other, int):
-        size = maybe_add(sparse_size, other, alpha)
-        assert len(size) == 2
+        size = _sanitize_sparse_size(maybe_add(sparse_size, other, alpha))
         input._sparse_size = size
         input._sort_order = sort_order
         input._is_undirected = is_undirected
         input._T_perm = T_perm
 
     elif isinstance(other, Tensor) and other.size() == (2, 1):
-        size = maybe_add(sparse_size, other.view(-1).tolist(), alpha)
-        assert len(size) == 2
+        size = _sanitize_sparse_size(maybe_add(sparse_size, other.view(-1).tolist(), alpha))
         input._sparse_size = size
         input._sort_order = sort_order
         if torch.equal(other[0], other[1]):
@@ -1668,8 +1715,7 @@ def add_(
         input._T_perm = T_perm
 
     elif isinstance(other, EdgeIndex):
-        size = maybe_add(sparse_size, other._sparse_size, alpha)
-        assert len(size) == 2
+        size = _sanitize_sparse_size(maybe_add(sparse_size, other._sparse_size, alpha))
         input._sparse_size = size
 
     return input
@@ -1677,14 +1723,14 @@ def add_(
 
 @implements(aten.sub.Tensor)
 def _sub(
-    input: EdgeIndex,
+    input: Union[int, Tensor, EdgeIndex],
     other: Union[int, Tensor, EdgeIndex],
     *,
     alpha: int = 1,
 ) -> Union[EdgeIndex, Tensor]:
 
     out = aten.sub.Tensor(
-        input._data,
+        input._data if isinstance(input, EdgeIndex) else input,
         other._data if isinstance(other, EdgeIndex) else other,
         alpha=alpha,
     )
@@ -1693,23 +1739,26 @@ def _sub(
         return out
     if out.dim() != 2 or out.size(0) != 2:
         return out
+    if not is_compiling() and not torch.jit.is_tracing() and out.numel() > 0 and int(out.min()) < 0:
+        return out
 
     out = EdgeIndex(out)
+
+    if not isinstance(input, EdgeIndex):
+        return out
 
     if isinstance(other, Tensor) and other.numel() <= 1:
         other = int(other)
 
     if isinstance(other, int):
-        size = maybe_sub(input._sparse_size, other, alpha)
-        assert len(size) == 2
+        size = _sanitize_sparse_size(maybe_sub(input._sparse_size, other, alpha))
         out._sparse_size = size
         out._sort_order = input._sort_order
         out._is_undirected = input.is_undirected
         out._T_perm = input._T_perm
 
     elif isinstance(other, Tensor) and other.size() == (2, 1):
-        size = maybe_sub(input._sparse_size, other.view(-1).tolist(), alpha)
-        assert len(size) == 2
+        size = _sanitize_sparse_size(maybe_sub(input._sparse_size, other.view(-1).tolist(), alpha))
         out._sparse_size = size
         out._sort_order = input._sort_order
         if torch.equal(other[0], other[1]):
@@ -1721,11 +1770,17 @@ def _sub(
 
 @implements(aten.sub_.Tensor)
 def sub_(
-    input: EdgeIndex,
+    input: Union[Tensor, EdgeIndex],
     other: Union[int, Tensor, EdgeIndex],
     *,
     alpha: int = 1,
-) -> EdgeIndex:
+) -> Union[Tensor, EdgeIndex]:
+    if not isinstance(input, EdgeIndex):
+        return aten.sub_.Tensor(
+            input,
+            other._data if isinstance(other, EdgeIndex) else other,
+            alpha=alpha,
+        )
 
     sparse_size = input._sparse_size
     sort_order = input._sort_order
@@ -1743,16 +1798,14 @@ def sub_(
         other = int(other)
 
     if isinstance(other, int):
-        size = maybe_sub(sparse_size, other, alpha)
-        assert len(size) == 2
+        size = _sanitize_sparse_size(maybe_sub(sparse_size, other, alpha))
         input._sparse_size = size
         input._sort_order = sort_order
         input._is_undirected = is_undirected
         input._T_perm = T_perm
 
     elif isinstance(other, Tensor) and other.size() == (2, 1):
-        size = maybe_sub(sparse_size, other.view(-1).tolist(), alpha)
-        assert len(size) == 2
+        size = _sanitize_sparse_size(maybe_sub(sparse_size, other.view(-1).tolist(), alpha))
         input._sparse_size = size
         input._sort_order = sort_order
         if torch.equal(other[0], other[1]):
@@ -1887,7 +1940,7 @@ class _TorchSPMM(torch.autograd.Function):
                         crow_indices=rowptr,
                         col_indices=col,
                         values=value,
-                        size=input.get_sparse_size()[::-1],
+                        size=input.get_sparse_size(),
                         device=input.device,
                     )
 

@@ -1390,6 +1390,57 @@ def test_compile_create_edge_index():
     assert compiled_model() is None
 
 
+def test_rhs_dispatch_and_utils():
+    from torch_geometric.utils import coalesce, is_undirected, sort_edge_index
+
+    ei = EdgeIndex([[0, 1], [1, 0]], sparse_size=(3, 3))
+    assert sort_edge_index(ei).equal(torch.tensor([[0, 1], [1, 0]]))
+    assert coalesce(ei).equal(torch.tensor([[0, 1], [1, 0]]))
+    assert is_undirected(ei)
+
+    rhs_sub = torch.tensor([[3, 3], [3, 3]]) - ei
+    assert rhs_sub.equal(torch.tensor([[3, 2], [2, 3]]))
+
+    acc = torch.zeros(2, 2, dtype=torch.long)
+    acc += ei
+    assert not isinstance(acc, EdgeIndex)
+    assert acc.equal(torch.tensor([[0, 1], [1, 0]]))
+
+
+def test_negative_offset_downgrade():
+    ei = EdgeIndex([[1, 2], [2, 1]], sparse_size=(4, 4), sort_order='row',
+                   is_undirected=True)
+    out = ei - 5
+    assert not isinstance(out, EdgeIndex)
+    assert out.equal(torch.tensor([[-4, -3], [-3, -4]]))
+
+
+def test_bipartite_spmm_transpose_backward():
+    ei = EdgeIndex([[0, 2, 3, 1], [0, 1, 3, 5]],
+                   sparse_size=(4, 7)).sort_by('col').values
+    x = torch.randn(4, 8, requires_grad=True)
+    ei.matmul(x, transpose=True).sum().backward()
+
+    adj = torch.zeros(4, 7)
+    adj[ei[0], ei[1]] = 1.0
+    x_ref = x.detach().clone().requires_grad_(True)
+    (adj.t() @ x_ref).sum().backward()
+    assert torch.allclose(x.grad, x_ref.grad, atol=1e-5)
+
+
+def test_compile_dynamic_gcn_edge_index():
+    from torch_geometric.nn import GCNConv
+
+    gcn = GCNConv(8, 8).eval()
+    ei = EdgeIndex([[0, 1, 2], [1, 2, 0]], sparse_size=(4, 4),
+                   sort_order='row')
+    x = torch.randn(4, 8)
+    expected = gcn(x, ei)
+    compiled = torch.compile(gcn, dynamic=True)
+    out = compiled(x, ei)
+    assert torch.allclose(out, expected, atol=1e-5)
+
+
 if __name__ == '__main__':
     import argparse
 
