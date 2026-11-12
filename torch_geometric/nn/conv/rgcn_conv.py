@@ -303,6 +303,14 @@ class FastRGCNConv(RGCNConv):
     r"""See :class:`RGCNConv`."""
     SUPPORTS_DECOMPOSED_LAYERS: bool = False
 
+    def __init__(self, *args, **kwargs):
+        aggr = kwargs.get('aggr', 'mean')
+        if aggr not in ['add', 'sum', 'mean']:
+            raise ValueError(
+                f"'{self.__class__.__name__}' only supports 'add', 'sum' or "
+                f"'mean' aggregation (got '{aggr}')")
+        super().__init__(*args, **kwargs)
+
     def forward(self, x: Union[OptTensor, Tuple[OptTensor, Tensor]],
                 edge_index: Adj, edge_type: OptTensor = None):
 

@@ -8,7 +8,7 @@ from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn.dense.linear import Linear
 from torch_geometric.nn.inits import zeros
 from torch_geometric.typing import OptTensor
-from torch_geometric.utils import get_laplacian
+from torch_geometric.utils import get_laplacian, scatter
 
 
 class ChebConv(MessagePassing):
@@ -122,7 +122,20 @@ class ChebConv(MessagePassing):
         assert edge_weight is not None
 
         if lambda_max is None:
-            lambda_max = 2.0 * edge_weight.max()
+            if batch is not None and edge_weight.numel() > 0:
+                batch_size = int(batch.max()) + 1 if batch.numel() > 0 else 0
+                lambda_max = scatter(
+                    2.0 * edge_weight,
+                    batch[edge_index[0]],
+                    dim=0,
+                    dim_size=batch_size,
+                    reduce='max',
+                )
+            elif edge_weight.numel() > 0:
+                lambda_max = 2.0 * edge_weight.max()
+            else:
+                lambda_max = torch.tensor(0.0, dtype=edge_weight.dtype,
+                                          device=edge_index.device)
         elif not isinstance(lambda_max, Tensor):
             lambda_max = torch.tensor(lambda_max, dtype=dtype,
                                       device=edge_index.device)
@@ -132,7 +145,7 @@ class ChebConv(MessagePassing):
             lambda_max = lambda_max[batch[edge_index[0]]]
 
         edge_weight = (2.0 * edge_weight) / lambda_max
-        edge_weight.masked_fill_(edge_weight == float('inf'), 0)
+        edge_weight.masked_fill_(~torch.isfinite(edge_weight), 0)
 
         loop_mask = edge_index[0] == edge_index[1]
         edge_weight[loop_mask] -= 1

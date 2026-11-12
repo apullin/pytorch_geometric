@@ -105,7 +105,7 @@ class FeaStConv(MessagePassing):
     def message(self, x_i: Tensor, x_j: Tensor) -> Tensor:
         q = self.u(x_j - x_i) + self.c  # Translation invariance.
         q = F.softmax(q, dim=1)
-        x_j = self.lin(x_j).view(x_j.size(0), self.heads, -1)
+        x_j = self.lin(x_j).view(x_j.size(0), self.heads, self.out_channels)
         return (x_j * q.view(-1, self.heads, 1)).sum(dim=1)
 
     def __repr__(self) -> str:

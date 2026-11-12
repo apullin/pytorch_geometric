@@ -111,9 +111,9 @@ class HypergraphConv(MessagePassing):
             self.lin = Linear(in_channels, out_channels, bias=False,
                               weight_initializer='glorot')
 
-        if bias and concat:
-            self.bias = Parameter(torch.empty(heads * out_channels))
-        elif bias and not concat:
+        if bias and self.concat:
+            self.bias = Parameter(torch.empty(self.heads * out_channels))
+        elif bias and not self.concat:
             self.bias = Parameter(torch.empty(out_channels))
         else:
             self.register_parameter('bias', None)

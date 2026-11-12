@@ -69,3 +69,14 @@ def test_cheb_conv_batch():
     assert out.size() == (7, 16)
     assert torch.allclose(out1, out[:4], atol=1e-6)
     assert torch.allclose(out2, out[4:], atol=1e-6)
+
+    conv_unnorm = ChebConv(8, 16, K=2, normalization=None)
+    u1 = conv_unnorm(x1, edge_index1, edge_weight1)
+    u2 = conv_unnorm(x2, edge_index2, edge_weight2)
+    ub = conv_unnorm(batch.x, batch.edge_index, batch.edge_weight, batch.batch)
+    assert torch.allclose(u1, ub[:4], atol=1e-5)
+    assert torch.allclose(u2, ub[4:], atol=1e-5)
+
+    edgeless_out = conv_unnorm(torch.randn(2, 8), torch.empty((2, 0), dtype=torch.long))
+    assert torch.isfinite(edgeless_out).all()
+

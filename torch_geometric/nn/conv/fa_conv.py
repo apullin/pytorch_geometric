@@ -173,11 +173,10 @@ class FAConv(MessagePassing):
         """
         if self.normalize:
             if isinstance(edge_index, Tensor):
-                assert edge_weight is None
                 cache = self._cached_edge_index
                 if cache is None:
                     edge_index, edge_weight = gcn_norm(  # yapf: disable
-                        edge_index, None, x.size(self.node_dim), False,
+                        edge_index, edge_weight, x.size(self.node_dim), False,
                         self.add_self_loops, self.flow, dtype=x.dtype)
                     if self.cached:
                         self._cached_edge_index = (edge_index, edge_weight)
@@ -196,11 +195,14 @@ class FAConv(MessagePassing):
                 else:
                     edge_index = cache
         else:
-            if isinstance(edge_index,
-                          Tensor) and not is_torch_sparse_tensor(edge_index):
-                assert edge_weight is not None
-            elif isinstance(edge_index, SparseTensor):
-                assert edge_index.has_value()
+            if (isinstance(edge_index, Tensor)
+                    and not is_torch_sparse_tensor(edge_index)
+                    and edge_weight is None):
+                raise ValueError("'edge_weight' must be provided when "
+                                 "'normalize=False'")
+            elif isinstance(edge_index, SparseTensor) and not edge_index.has_value():
+                raise ValueError("'edge_index' SparseTensor must carry edge "
+                                 "values when 'normalize=False'")
 
         alpha_l = self.att_l(x)
         alpha_r = self.att_r(x)

@@ -28,3 +28,14 @@ def test_cluster_gcn_conv():
 
         if torch_geometric.typing.WITH_TORCH_SPARSE:
             assert torch.allclose(jit(x, adj2.t()), out, atol=1e-5)
+
+
+def test_cluster_gcn_conv_no_self_loops_and_edge_order():
+    conv = ClusterGCNConv(4, 4, diag_lambda=1.0, add_self_loops=False).eval()
+    x = torch.randn(2, 4)
+    assert conv(x, torch.tensor([[0], [1]])).size() == (2, 4)
+
+    ei_a = torch.tensor([[0, 1, 1], [0, 0, 1]])
+    ei_b = torch.tensor([[1, 1, 0], [1, 0, 0]])
+    assert torch.allclose(conv(x, ei_a), conv(x, ei_b), atol=1e-6)
+

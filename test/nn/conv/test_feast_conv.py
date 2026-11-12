@@ -47,3 +47,8 @@ def test_feast_conv():
 
         if torch_geometric.typing.WITH_TORCH_SPARSE:
             assert torch.allclose(jit((x1, x2), adj2.t()), out, atol=1e-6)
+
+    conv_no_sl = FeaStConv(16, 32, heads=2, add_self_loops=False)
+    empty_ei = torch.empty((2, 0), dtype=torch.long)
+    assert conv_no_sl(torch.randn(4, 16), empty_ei).size() == (4, 32)
+

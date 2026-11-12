@@ -66,3 +66,14 @@ def test_eg_conv_with_sparse_input_feature():
 
     conv = EGConv(16, 32)
     assert conv(x, edge_index).size() == (4, 32)
+
+
+def test_eg_conv_trailing_isolated_equivariance():
+    conv = EGConv(8, 8, aggregators=['sum', 'max'], num_heads=2, num_bases=2,
+                  add_self_loops=True).eval()
+    x = torch.randn(5, 8)
+    edge_index = torch.tensor([[0, 1], [1, 0]])
+    perm = torch.tensor([4, 1, 0, 2, 3])
+    inv = torch.argsort(perm)
+    assert torch.allclose(conv(x, edge_index)[perm], conv(x[perm], inv[edge_index]), atol=1e-5)
+

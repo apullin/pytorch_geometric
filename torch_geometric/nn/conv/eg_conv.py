@@ -162,7 +162,8 @@ class EGConv(MessagePassing):
                 if self.cached and cache is not None:
                     edge_index = cache[0]
                 else:
-                    edge_index, _ = add_remaining_self_loops(edge_index)
+                    edge_index, _ = add_remaining_self_loops(
+                        edge_index, num_nodes=x.size(self.node_dim))
                     if self.cached:
                         self._cached_edge_index = (edge_index, None)
 

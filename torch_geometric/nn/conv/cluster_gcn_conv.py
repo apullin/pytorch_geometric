@@ -84,7 +84,8 @@ class ClusterGCNConv(MessagePassing):
             deg_inv = 1. / torch_sparse.sum(edge_index, dim=1).clamp_(1.)
 
             edge_weight = deg_inv[col]
-            edge_weight[row == col] += self.diag_lambda * deg_inv
+            loop_mask = row == col
+            edge_weight[loop_mask] += self.diag_lambda * deg_inv[row[loop_mask]]
             edge_index = edge_index.set_value(edge_weight, layout='coo')
 
         elif is_torch_sparse_tensor(edge_index):
@@ -102,7 +103,8 @@ class ClusterGCNConv(MessagePassing):
             deg_inv = 1. / degree(col, num_nodes=edge_index.size(0)).clamp_(1.)
 
             edge_weight = deg_inv[col]
-            edge_weight[row == col] += self.diag_lambda * deg_inv
+            loop_mask = row == col
+            edge_weight[loop_mask] += self.diag_lambda * deg_inv[row[loop_mask]]
 
             edge_index = set_sparse_value(edge_index, edge_weight)
 
@@ -115,7 +117,8 @@ class ClusterGCNConv(MessagePassing):
             deg_inv = 1. / degree(col, num_nodes=num_nodes).clamp_(1.)
 
             edge_weight = deg_inv[col]
-            edge_weight[row == col] += self.diag_lambda * deg_inv
+            loop_mask = row == col
+            edge_weight[loop_mask] += self.diag_lambda * deg_inv[row[loop_mask]]
 
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
         out = self.propagate(edge_index, x=x, edge_weight=edge_weight)
