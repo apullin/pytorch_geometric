@@ -96,6 +96,10 @@ class SetTransformerAggregation(Aggregation):
 
         x, mask = self.to_dense_batch(x, index, ptr, dim_size, dim,
                                       max_num_elements=max_num_elements)
+        if x.size(1) == 0:
+            out_channels = (self.channels * self.num_seed_points
+                            if self.concat else self.channels)
+            return x.new_zeros(x.size(0), out_channels)
 
         for encoder in self.encoders:
             x = encoder(x, mask)

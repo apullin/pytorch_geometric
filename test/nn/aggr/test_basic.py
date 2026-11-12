@@ -140,3 +140,36 @@ def test_learnable_channels_aggregation(Aggregation):
     out.mean().backward()
     for param in aggr.parameters():
         assert not torch.isnan(param.grad).any()
+
+
+def test_empty_learned_and_quantile_aggregations():
+    from torch_geometric.nn.aggr import (
+        GRUAggregation,
+        GraphMultisetTransformer,
+        LCMAggregation,
+        LSTMAggregation,
+        MedianAggregation,
+        PatchTransformerAggregation,
+        QuantileAggregation,
+        SetTransformerAggregation,
+        SortAggregation,
+    )
+
+    x = torch.empty(0, 8)
+    index = torch.empty(0, dtype=torch.long)
+
+    for aggr, expected_cols in [
+        (MedianAggregation(), 8),
+        (QuantileAggregation(q=[0.25, 0.75]), 16),
+        (SortAggregation(k=2), 16),
+        (GraphMultisetTransformer(8, k=2, heads=2), 8),
+        (SetTransformerAggregation(8, num_seed_points=2, heads=2), 16),
+        (LCMAggregation(8, 8), 8),
+        (PatchTransformerAggregation(8, 8, patch_size=2, hidden_channels=8, heads=2), 8),
+        (LSTMAggregation(8, 8), 8),
+        (GRUAggregation(8, 8), 8),
+    ]:
+        out = aggr.eval()(x, index, dim_size=3)
+        assert out.size() == (3, expected_cols)
+        assert torch.isfinite(out).all()
+

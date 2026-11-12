@@ -41,7 +41,7 @@ class SortAggregation(Aggregation):
         max_num_elements: Optional[int] = None,
     ) -> Tensor:
 
-        fill_value = x.detach().min() - 1
+        fill_value = x.detach().min() - 1 if x.numel() > 0 else x.new_zeros(())
         batch_x, _ = self.to_dense_batch(x, index, ptr, dim_size, dim,
                                          fill_value=fill_value,
                                          max_num_elements=max_num_elements)

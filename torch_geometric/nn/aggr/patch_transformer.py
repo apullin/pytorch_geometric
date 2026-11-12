@@ -107,11 +107,14 @@ class PatchTransformerAggregation(Aggregation):
             else:
                 count = scatter(torch.ones_like(index), index, dim=0,
                                 dim_size=dim_size, reduce='sum')
-            max_num_elements = int(count.max()) + 1
+            max_num_elements = (int(count.max()) + 1
+                                if count.numel() > 0 else self.patch_size)
 
-        # Set `max_num_elements` to a multiple of `patch_size`:
-        max_num_elements = (math.floor(max_num_elements / self.patch_size) *
-                            self.patch_size)
+        # Set `max_num_elements` to a positive multiple of `patch_size`:
+        max_num_elements = max(
+            self.patch_size,
+            math.floor(max_num_elements / self.patch_size) * self.patch_size,
+        )
 
         x = self.lin(x)
 

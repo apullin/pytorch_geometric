@@ -80,6 +80,8 @@ class LCMAggregation(Aggregation):
 
         x, _ = self.to_dense_batch(x, index, ptr, dim_size, dim,
                                    max_num_elements=max_num_elements)
+        if x.size(1) == 0:
+            return x.new_zeros(x.size(0), self.out_channels)
 
         x = x.permute(1, 0, 2)  # [num_neighbors, num_nodes, num_features]
         _, num_nodes, num_features = x.size()

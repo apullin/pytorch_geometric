@@ -53,6 +53,8 @@ class LSTMAggregation(Aggregation):
 
         x, _ = self.to_dense_batch(x, index, ptr, dim_size, dim,
                                    max_num_elements=max_num_elements)
+        if x.size(1) == 0:
+            return x.new_zeros(x.size(0), self.out_channels)
 
         return self.lstm(x)[0][:, -1]
 

@@ -78,6 +78,16 @@ class QuantileAggregation(Aggregation):
         assert index is not None  # Required for TorchScript.
 
         count = torch.bincount(index, minlength=dim_size or 0)
+        if x.size(dim) == 0:
+            out_shape = list(x.shape)
+            out_shape[dim] = count.numel() * self.q.numel()
+            out = x.new_full(out_shape, self.fill_value)
+            if self.q.numel() > 1:
+                out_shape = (out_shape[:dim] + [count.numel(), -1] +
+                             out_shape[dim + 2:])
+                out = out.view(out_shape)
+            return out
+
         ptr = cumsum(count)[:-1]
 
         # In case there exists dangling indices (`dim_size > index.max()`), we
