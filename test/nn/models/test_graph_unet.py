@@ -1,10 +1,9 @@
 import torch
 
 from torch_geometric.nn import GraphUNet
-from torch_geometric.testing import is_full_test, onlyLinux
+from torch_geometric.testing import is_full_test
 
 
-@onlyLinux  # TODO  (matthias) Investigate CSR @ CSR support on Windows.
 def test_graph_unet():
     model = GraphUNet(16, 32, 8, depth=3)
     out = 'GraphUNet(16, 32, 8, depth=3, pool_ratios=[0.5, 0.5, 0.5])'

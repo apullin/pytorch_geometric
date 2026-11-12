@@ -15,7 +15,10 @@ class NormalizeScale(BaseTransform):
         data = self.center(data)
 
         assert data.pos is not None
-        scale = (1.0 / data.pos.abs().max()) * 0.999999
-        data.pos = data.pos * scale
+        if data.pos.numel() > 0:
+            max_val = float(data.pos.abs().max())
+            if max_val > 0.0:
+                scale = (1.0 / max_val) * 0.999999
+                data.pos = data.pos * scale
 
         return data

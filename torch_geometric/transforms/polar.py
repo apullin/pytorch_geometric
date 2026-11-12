@@ -46,8 +46,12 @@ class Polar(BaseTransform):
         theta = torch.atan2(cart[..., 1], cart[..., 0]).view(-1, 1)
         theta = theta + (theta < 0).type_as(theta) * (2 * PI)
 
-        if self.norm:
-            rho = rho / (rho.max() if self.max is None else self.max)
+        if self.norm and rho.numel() > 0:
+            max_val = float(rho.max()) if self.max is None else self.max
+            if max_val > 0.0:
+                rho = rho / max_val
+            theta = theta / (2 * PI)
+        elif self.norm:
             theta = theta / (2 * PI)
 
         polar = torch.cat([rho, theta], dim=-1)

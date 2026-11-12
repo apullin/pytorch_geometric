@@ -148,7 +148,7 @@ class ChebConv(MessagePassing):
         edge_weight.masked_fill_(~torch.isfinite(edge_weight), 0)
 
         loop_mask = edge_index[0] == edge_index[1]
-        edge_weight[loop_mask] -= 1
+        edge_weight = torch.where(loop_mask, edge_weight - 1, edge_weight)
 
         return edge_index, edge_weight
 

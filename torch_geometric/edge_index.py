@@ -1885,12 +1885,13 @@ class _TorchSPMM(torch.autograd.Function):
             ctx.reduce = reduce
             ctx.transpose = transpose
 
+        val = input._get_value(dtype=other.dtype) if value is None else value
         if not transpose:
             assert input.is_sorted_by_row
-            adj = input.to_sparse_csr(value)
+            adj = input.to_sparse_csr(val)
         else:
             assert input.is_sorted_by_col
-            adj = input.to_sparse_csc(value).t()
+            adj = input.to_sparse_csc(val).t()
 
         if torch_geometric.typing.WITH_PT20 and not other.is_cuda:
             return torch.sparse.mm(adj, other, reduce)
@@ -1913,13 +1914,14 @@ class _TorchSPMM(torch.autograd.Function):
 
             if not ctx.transpose:
                 if value is None and input.is_undirected:
-                    adj = input.to_sparse_csr(value)
+                    adj = input.to_sparse_csr(
+                        input._get_value(dtype=grad_out.dtype))
                 else:
                     (colptr, row), perm = input.get_csc()
-                    if value is not None and perm is not None:
+                    if value is None:
+                        value = input._get_value(dtype=grad_out.dtype)
+                    elif perm is not None:
                         value = value[perm]
-                    else:
-                        value = input._get_value()
                     adj = torch.sparse_csr_tensor(
                         crow_indices=colptr,
                         col_indices=row,
@@ -1929,13 +1931,14 @@ class _TorchSPMM(torch.autograd.Function):
                     )
             else:
                 if value is None and input.is_undirected:
-                    adj = input.to_sparse_csc(value).t()
+                    adj = input.to_sparse_csc(
+                        input._get_value(dtype=grad_out.dtype)).t()
                 else:
                     (rowptr, col), perm = input.get_csr()
-                    if value is not None and perm is not None:
+                    if value is None:
+                        value = input._get_value(dtype=grad_out.dtype)
+                    elif perm is not None:
                         value = value[perm]
-                    else:
-                        value = input._get_value()
                     adj = torch.sparse_csr_tensor(
                         crow_indices=rowptr,
                         col_indices=col,

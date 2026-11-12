@@ -81,7 +81,7 @@ class ClusterGCNConv(MessagePassing):
                 edge_index = torch_sparse.set_diag(edge_index)
 
             col, row, _ = edge_index.coo()  # Transposed.
-            deg_inv = 1. / torch_sparse.sum(edge_index, dim=1).clamp_(1.)
+            deg_inv = 1. / torch_sparse.sum(edge_index, dim=1).clamp_(1.).to(x.dtype)
 
             edge_weight = deg_inv[col]
             loop_mask = row == col
@@ -100,7 +100,8 @@ class ClusterGCNConv(MessagePassing):
 
             col_and_row, value = to_edge_index(edge_index)
             col, row = col_and_row[0], col_and_row[1]
-            deg_inv = 1. / degree(col, num_nodes=edge_index.size(0)).clamp_(1.)
+            deg_inv = 1. / degree(col, num_nodes=edge_index.size(0),
+                                  dtype=x.dtype).clamp_(1.)
 
             edge_weight = deg_inv[col]
             loop_mask = row == col
@@ -114,7 +115,8 @@ class ClusterGCNConv(MessagePassing):
                 edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)
 
             row, col = edge_index[0], edge_index[1]
-            deg_inv = 1. / degree(col, num_nodes=num_nodes).clamp_(1.)
+            deg_inv = 1. / degree(col, num_nodes=num_nodes,
+                                  dtype=x.dtype).clamp_(1.)
 
             edge_weight = deg_inv[col]
             loop_mask = row == col

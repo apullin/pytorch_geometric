@@ -46,10 +46,21 @@ class Spherical(BaseTransform):
         theta = torch.atan2(cart[..., 1], cart[..., 0]).view(-1, 1)
         theta = theta + (theta < 0).type_as(theta) * (2 * PI)
 
-        phi = torch.acos(cart[..., 2] / rho.view(-1)).view(-1, 1)
+        rho_flat = rho.view(-1)
+        cos_phi = torch.where(
+            rho_flat > 0,
+            (cart[..., 2] / rho_flat.clamp(min=1e-12)).clamp(-1.0, 1.0),
+            torch.ones_like(cart[..., 2]),
+        )
+        phi = torch.acos(cos_phi).view(-1, 1)
 
-        if self.norm:
-            rho = rho / (rho.max() if self.max is None else self.max)
+        if self.norm and rho.numel() > 0:
+            max_val = float(rho.max()) if self.max is None else self.max
+            if max_val > 0.0:
+                rho = rho / max_val
+            theta = theta / (2 * PI)
+            phi = phi / PI
+        elif self.norm:
             theta = theta / (2 * PI)
             phi = phi / PI
 

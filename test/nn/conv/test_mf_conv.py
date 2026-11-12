@@ -54,3 +54,14 @@ def test_mf_conv():
         if torch_geometric.typing.WITH_TORCH_SPARSE:
             assert torch.allclose(jit((x1, x2), adj.t()), out1)
             assert torch.allclose(jit((x1, None), adj.t()), out2)
+
+
+def test_mf_conv_autocast_bfloat16():
+    conv = MFConv(8, 16, max_degree=3).eval()
+    x = torch.randn(6, 8)
+    edge_index = torch.tensor([[0, 1, 2], [1, 2, 0]])
+    with torch.autocast('cpu', dtype=torch.bfloat16):
+        out = conv(x, edge_index)
+    assert out.dtype == torch.bfloat16
+    assert out.size() == (6, 16)
+

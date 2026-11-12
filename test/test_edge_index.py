@@ -1441,6 +1441,21 @@ def test_compile_dynamic_gcn_edge_index():
     assert torch.allclose(out, expected, atol=1e-5)
 
 
+def test_spmm_float64_and_diagonal_weighted_backward():
+    ei = EdgeIndex([[0, 1], [0, 1]], sparse_size=(2, 2), sort_order='row')
+    x64 = torch.randn(2, 3, dtype=torch.float64, requires_grad=True)
+    out64 = ei.matmul(x64)
+    out64.sum().backward()
+    assert out64.dtype == torch.float64
+    assert torch.allclose(x64.grad, torch.ones_like(x64))
+
+    x_w = torch.randn(2, 3, requires_grad=True)
+    val = torch.tensor([5.0, 10.0])
+    ei.matmul(x_w, input_value=val).sum().backward()
+    assert torch.allclose(x_w.grad[:, 0], val)
+
+
+
 if __name__ == '__main__':
     import argparse
 

@@ -34,6 +34,8 @@ class DynamicInheritance(type):
 
             if name not in globals():
                 globals()[name] = MetaResolver(name, (cls, base_cls), {})
+                if hasattr(torch.serialization, 'add_safe_globals'):
+                    torch.serialization.add_safe_globals([globals()[name]])
             new_cls = globals()[name]
 
         params = list(inspect.signature(base_cls.__init__).parameters.items())
@@ -52,6 +54,17 @@ class DynamicInheritance(type):
 class DynamicInheritanceGetter:
     def __call__(self, cls: Type, base_cls: Type) -> Self:
         return cls(_base_cls=base_cls)
+
+
+def _construct_batch(
+    cls: Type,
+    base_cls: Type,
+    state: Optional[dict] = None,
+) -> Any:
+    obj = cls(_base_cls=base_cls)
+    if state is not None:
+        obj.__dict__.update(state)
+    return obj
 
 
 class Batch(metaclass=DynamicInheritance):
@@ -214,4 +227,4 @@ class Batch(metaclass=DynamicInheritance):
 
     def __reduce__(self) -> Any:
         state = self.__dict__.copy()
-        return DynamicInheritanceGetter(), self.__class__.__bases__, state
+        return _construct_batch, self.__class__.__bases__, state

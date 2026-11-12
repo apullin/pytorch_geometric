@@ -59,3 +59,10 @@ def test_spherical():
         torch.tensor([[1.0, 1.0, 0.0, 0.0], [1.0, 1.0, 0.0, 1.0]]),
         atol=1e-4,
     )
+
+    edgeless = Spherical()(Data(pos=pos, edge_index=torch.empty((2, 0), dtype=torch.long)))
+    assert edgeless.edge_attr.size() == (0, 3)
+
+    self_loop = Spherical()(Data(pos=pos, edge_index=torch.tensor([[0, 0], [0, 1]])))
+    assert torch.isfinite(self_loop.edge_attr).all()
+

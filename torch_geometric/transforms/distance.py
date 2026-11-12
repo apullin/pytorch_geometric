@@ -47,7 +47,10 @@ class Distance(BaseTransform):
             max_val = float(dist.max()) if self.max is None else self.max
 
             length = self.interval[1] - self.interval[0]
-            dist = length * (dist / max_val) + self.interval[0]
+            if max_val > 0.0:
+                dist = length * (dist / max_val) + self.interval[0]
+            else:
+                dist = torch.full_like(dist, self.interval[0])
 
         if pseudo is not None and self.cat:
             pseudo = pseudo.view(-1, 1) if pseudo.dim() == 1 else pseudo

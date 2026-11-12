@@ -39,3 +39,8 @@ def test_cluster_gcn_conv_no_self_loops_and_edge_order():
     ei_b = torch.tensor([[1, 1, 0], [1, 0, 0]])
     assert torch.allclose(conv(x, ei_a), conv(x, ei_b), atol=1e-6)
 
+    conv_bf16 = ClusterGCNConv(4, 4).to(torch.bfloat16).eval()
+    out_bf16 = conv_bf16(x.to(torch.bfloat16), ei_a)
+    assert out_bf16.dtype == torch.bfloat16
+
+

@@ -101,3 +101,12 @@ def test_gdc():
     assert torch.all(
         torch.isclose(col_sum, torch.tensor(1.0))
         | torch.isclose(col_sum, torch.tensor(0.0)))
+
+
+def test_gdc_single_node():
+    from torch_geometric.data import Data
+
+    single_out = GDC()(Data(x=torch.randn(1, 4),
+                            edge_index=torch.empty((2, 0), dtype=torch.long)))
+    assert torch.isfinite(single_out.edge_attr).all()
+

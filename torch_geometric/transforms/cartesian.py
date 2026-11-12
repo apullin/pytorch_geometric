@@ -49,7 +49,10 @@ class Cartesian(BaseTransform):
 
             length = self.interval[1] - self.interval[0]
             center = (self.interval[0] + self.interval[1]) / 2
-            cart = length * cart / (2 * max_val) + center
+            if max_val > 0.0:
+                cart = length * cart / (2 * max_val) + center
+            else:
+                cart = torch.full_like(cart, center)
 
         if pseudo is not None and self.cat:
             pseudo = pseudo.view(-1, 1) if pseudo.dim() == 1 else pseudo

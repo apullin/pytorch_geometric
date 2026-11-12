@@ -608,3 +608,21 @@ def test_torch_nested_batch():
         batch.x.to_padded_tensor(0.0),
         expected.to_padded_tensor(0.0),
     )
+
+
+def test_weights_only_serialization(tmp_path):
+    from torch_geometric import EdgeIndex
+    from torch_geometric.data import HeteroData
+
+    d1 = Data(x=torch.randn(3, 4), edge_index=EdgeIndex([[0, 1], [1, 0]], sparse_size=(3, 3)))
+    d2 = Data(x=torch.randn(2, 4), edge_index=EdgeIndex(torch.empty((2, 0), dtype=torch.long), sparse_size=(2, 2)))
+    batch = Batch.from_data_list([d1, d2])
+    hd = HeteroData()
+    hd['paper'].x = torch.randn(3, 4)
+
+    for name, obj in [('data.pt', d1), ('batch.pt', batch), ('hetero.pt', hd)]:
+        p = tmp_path / name
+        torch.save(obj, p)
+        loaded = torch.load(p, weights_only=True)
+        assert type(loaded).__name__ == type(obj).__name__
+

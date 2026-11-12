@@ -100,7 +100,9 @@ class MFConv(MessagePassing):
         # propagate_type: (x: OptPairTensor)
         h = self.propagate(edge_index, x=x, size=size)
 
-        out = h.new_empty(list(h.size())[:-1] + [self.out_channels])
+        out_dtype = self.lins_l[0](h.narrow(self.node_dim, 0, 0)).dtype
+        out = h.new_empty(list(h.size())[:-1] + [self.out_channels],
+                          dtype=out_dtype)
         for i, (lin_l, lin_r) in enumerate(zip(self.lins_l, self.lins_r)):
             idx = (deg == i).nonzero().view(-1)
             r = lin_l(h.index_select(self.node_dim, idx))
@@ -108,7 +110,7 @@ class MFConv(MessagePassing):
             if x_r is not None:
                 r = r + lin_r(x_r.index_select(self.node_dim, idx))
 
-            out.index_copy_(self.node_dim, idx, r)
+            out.index_copy_(self.node_dim, idx, r.to(out.dtype))
 
         return out
 

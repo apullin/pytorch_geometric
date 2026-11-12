@@ -106,8 +106,12 @@ class GDC(BaseTransform):
                                      device=edge_index.device)
         else:
             edge_weight = data.edge_attr
-            assert self.exact
-            assert edge_weight.dim() == 1
+            if not self.exact:
+                raise ValueError("Weighted graphs are only supported in GDC "
+                                 "with 'exact=True'")
+            if edge_weight.dim() != 1:
+                raise ValueError(f"GDC requires one-dimensional 'edge_attr' "
+                                 f"weights (got shape {list(edge_weight.size())})")
 
         if self.self_loop_weight:
             edge_index, edge_weight = add_self_loops(
@@ -238,7 +242,8 @@ class GDC(BaseTransform):
             edge_index, edge_weight = add_self_loops(edge_index, edge_weight,
                                                      fill_value=1,
                                                      num_nodes=num_nodes)
-            mat = to_dense_adj(edge_index, edge_attr=edge_weight).squeeze()
+            mat = to_dense_adj(edge_index, edge_attr=edge_weight,
+                               max_num_nodes=num_nodes).squeeze(0)
             diff_matrix = kwargs['alpha'] * torch.inverse(mat)
 
         elif method == 'heat':
@@ -247,13 +252,14 @@ class GDC(BaseTransform):
                                                      fill_value=-1,
                                                      num_nodes=num_nodes)
             edge_weight = kwargs['t'] * edge_weight
-            mat = to_dense_adj(edge_index, edge_attr=edge_weight).squeeze()
+            mat = to_dense_adj(edge_index, edge_attr=edge_weight,
+                               max_num_nodes=num_nodes).squeeze(0)
             undirected = is_undirected(edge_index, edge_weight, num_nodes)
             diff_matrix = self.__expm__(mat, undirected)
 
         elif method == 'coeff':
-            adj_matrix = to_dense_adj(edge_index,
-                                      edge_attr=edge_weight).squeeze()
+            adj_matrix = to_dense_adj(edge_index, edge_attr=edge_weight,
+                                      max_num_nodes=num_nodes).squeeze(0)
             mat = torch.eye(num_nodes, device=edge_index.device)
 
             diff_matrix = kwargs['coeffs'][0] * mat

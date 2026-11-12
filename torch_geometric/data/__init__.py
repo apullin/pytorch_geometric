@@ -74,14 +74,33 @@ from torch_geometric.loader import DenseDataLoader
 # Serialization ###############################################################
 
 if torch_geometric.typing.WITH_PT24:
+    from .batch import _construct_batch, DynamicInheritanceGetter
+    from .data import DataEdgeAttr, DataTensorAttr
+    from .storage import BaseStorage, EdgeStorage, GlobalStorage, NodeStorage
+
+    # Ensure common dynamic Batch subclasses exist and are registered for
+    # `torch.load(..., weights_only=True)` in fresh processes:
+    Batch(_base_cls=Data)
+    Batch(_base_cls=HeteroData)
+    Batch(_base_cls=TemporalData)
+
     torch.serialization.add_safe_globals([
         Data,
         HeteroData,
+        Batch,
         TemporalData,
         ClusterData,
         TensorAttr,
         EdgeAttr,
         EdgeLayout,
+        DataEdgeAttr,
+        DataTensorAttr,
+        BaseStorage,
+        NodeStorage,
+        EdgeStorage,
+        GlobalStorage,
+        DynamicInheritanceGetter,
+        _construct_batch,
     ])
 
 # Deprecations ################################################################
