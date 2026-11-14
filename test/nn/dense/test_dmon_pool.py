@@ -21,3 +21,9 @@ def test_dmon_pooling():
     assert -1 <= spectral_loss <= 0.5
     assert 0 <= ortho_loss <= math.sqrt(2)
     assert 0 <= cluster_loss <= math.sqrt(num_clusters) - 1
+
+    _, _, _, sp_zero, o_zero, c_zero = pool(torch.randn(1, 4, 16),
+                                            torch.zeros(1, 4, 4))
+    assert torch.isfinite(sp_zero) and sp_zero == 0.0
+    assert torch.isfinite(o_zero) and torch.isfinite(c_zero)
+

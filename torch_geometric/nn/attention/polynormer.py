@@ -73,8 +73,9 @@ class PolynormerAttention(torch.nn.Module):
         v = self.v(x).view(B, N, self.head_channels, self.heads)
 
         if mask is not None:
-            mask = mask[:, :, None, None]
-            v.masked_fill_(~mask, 0.)
+            mask_4d = mask[:, :, None, None]
+            k = k.masked_fill(~mask_4d, 0.)
+            v = v.masked_fill(~mask_4d, 0.)
 
         # numerator
         kv = torch.einsum('bndh, bnmh -> bdmh', k, v)
@@ -89,6 +90,8 @@ class PolynormerAttention(torch.nn.Module):
         x = self.lns(x) * (h + self.beta)
         x = F.relu(self.lin_out(x))
         x = self.dropout(x)
+        if mask is not None:
+            x = x.masked_fill(~mask[:, :, None], 0.)
 
         return x
 

@@ -115,10 +115,11 @@ class ClusterGCNConv(MessagePassing):
                 edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)
 
             row, col = edge_index[0], edge_index[1]
-            deg_inv = 1. / degree(col, num_nodes=num_nodes,
+            target = col if self.flow == 'source_to_target' else row
+            deg_inv = 1. / degree(target, num_nodes=num_nodes,
                                   dtype=x.dtype).clamp_(1.)
 
-            edge_weight = deg_inv[col]
+            edge_weight = deg_inv[target]
             loop_mask = row == col
             edge_weight[loop_mask] += self.diag_lambda * deg_inv[row[loop_mask]]
 

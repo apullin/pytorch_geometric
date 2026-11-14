@@ -353,9 +353,11 @@ class MessagePassing(torch.nn.Module):
 
                 if isinstance(data, (tuple, list)):
                     assert len(data) == 2
-                    if isinstance(data[1 - dim], Tensor):
-                        self._set_size(size, 1 - dim, data[1 - dim])
-                    data = data[dim]
+                    tuple_idx = 0 if arg[-2:] == '_j' else 1
+                    other_dim = i if tuple_idx == 0 else j
+                    if isinstance(data[1 - tuple_idx], Tensor):
+                        self._set_size(size, other_dim, data[1 - tuple_idx])
+                    data = data[tuple_idx]
 
                 if isinstance(data, Tensor):
                     self._set_size(size, dim, data)
@@ -678,7 +680,7 @@ class MessagePassing(torch.nn.Module):
             if res is not None:
                 edge_index, size, kwargs = res
 
-        mutable_size = self._check_input(edge_index, size=None)
+        mutable_size = self._check_input(edge_index, size)
 
         coll_dict = self._collect(self._edge_user_args, edge_index,
                                   mutable_size, kwargs)

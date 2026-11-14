@@ -17,8 +17,7 @@ def test_arma_conv():
     assert str(conv) == 'ARMAConv(16, 32, num_stacks=8, num_layers=4)'
     out = conv(x, edge_index)
     assert out.size() == (4, 32)
-    with pytest.raises(RuntimeError):  # No 3D feature tensor support.
-        assert torch.allclose(conv(x, adj1.t()), out)
+    assert torch.allclose(conv(x, adj1.t()), out, atol=1e-5)
 
     if torch_geometric.typing.WITH_TORCH_SPARSE:
         adj2 = SparseTensor.from_edge_index(edge_index, sparse_sizes=(4, 4))

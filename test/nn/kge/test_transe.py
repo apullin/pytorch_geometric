@@ -23,3 +23,7 @@ def test_transe():
         assert 0 <= mean_rank <= 10
         assert 0 < mrr <= 1
         assert hits == 1.0
+
+    empty_idx = torch.empty(0, dtype=torch.long)
+    assert torch.isfinite(model.loss(empty_idx, empty_idx, empty_idx))
+

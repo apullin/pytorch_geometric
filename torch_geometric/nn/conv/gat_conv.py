@@ -323,16 +323,13 @@ class GATConv(MessagePassing):
                 if x_dst is not None:
                     x_dst = self.lin_dst(x_dst).view(-1, H, C)
 
-        x = (x_src, x_dst)
-
-        # Next, we compute node-level attention coefficients, both for source
-        # and target nodes (if present):
         alpha_src = (x_src * self.att_src).sum(dim=-1)
         alpha_dst = None if x_dst is None else (x_dst * self.att_dst).sum(-1)
-        alpha = (alpha_src, alpha_dst)
+        x_pair: OptPairTensor = (x_src, x_dst)
+        alpha_pair: OptPairTensor = (alpha_src, alpha_dst)
 
         if self.add_self_loops:
-            if isinstance(edge_index, Tensor):
+            if isinstance(edge_index, Tensor) and not is_torch_sparse_tensor(edge_index):
                 # We only want to add self-loops for nodes that appear both as
                 # source and target nodes:
                 num_nodes = x_src.size(0)
@@ -341,9 +338,23 @@ class GATConv(MessagePassing):
                 num_nodes = min(size) if size is not None else num_nodes
                 edge_index, edge_attr = remove_self_loops(
                     edge_index, edge_attr)
-                edge_index, edge_attr = add_self_loops(
-                    edge_index, edge_attr, fill_value=self.fill_value,
-                    num_nodes=num_nodes)
+                if self.flow == 'target_to_source':
+                    edge_index, edge_attr = add_self_loops(
+                        edge_index.flip(0), edge_attr,
+                        fill_value=self.fill_value, num_nodes=num_nodes)
+                    edge_index = edge_index.flip(0)
+                else:
+                    edge_index, edge_attr = add_self_loops(
+                        edge_index, edge_attr, fill_value=self.fill_value,
+                        num_nodes=num_nodes)
+            elif is_torch_sparse_tensor(edge_index):
+                if self.edge_dim is None:
+                    edge_index, _ = add_self_loops(edge_index)
+                else:
+                    raise NotImplementedError(
+                        "The usage of 'edge_attr' and 'add_self_loops' "
+                        "simultaneously is currently not yet supported for "
+                        "'edge_index' in a 'SparseTensor' form")
             elif isinstance(edge_index, SparseTensor):
                 if self.edge_dim is None:
                     edge_index = torch_sparse.set_diag(edge_index)
@@ -354,11 +365,11 @@ class GATConv(MessagePassing):
                         "'edge_index' in a 'SparseTensor' form")
 
         # edge_updater_type: (alpha: OptPairTensor, edge_attr: OptTensor)
-        alpha = self.edge_updater(edge_index, alpha=alpha, edge_attr=edge_attr,
-                                  size=size)
+        alpha = self.edge_updater(edge_index, alpha=alpha_pair,
+                                  edge_attr=edge_attr, size=size)
 
         # propagate_type: (x: OptPairTensor, alpha: Tensor)
-        out = self.propagate(edge_index, x=x, alpha=alpha, size=size)
+        out = self.propagate(edge_index, x=x_pair, alpha=alpha, size=size)
 
         if self.concat:
             out = out.view(-1, self.heads * self.out_channels)

@@ -79,10 +79,15 @@ class DenseGATConv(torch.nn.Module):
         H, C = self.heads, self.out_channels
         B, N, _ = x.size()
 
+        if mask is not None:
+            mask_2d = mask.view(-1, N, 1) * mask.view(-1, 1, N)
+            adj = adj * mask_2d.to(adj.dtype)
+
         if add_loop:
             adj = adj.clone()
             idx = torch.arange(N, dtype=torch.long, device=adj.device)
-            adj[:, idx, idx] = 1.0
+            adj[:, idx, idx] = (1.0 if mask is None
+                                else mask.view(-1, N).to(adj.dtype))
 
         x = self.lin(x).view(B, N, H, C)  # [B, N, H, C]
 
@@ -91,10 +96,13 @@ class DenseGATConv(torch.nn.Module):
 
         alpha = alpha_src.unsqueeze(1) + alpha_dst.unsqueeze(2)  # [B, N, N, H]
 
-        # Weighted and masked softmax:
+        # Weighted and masked softmax (safe for isolated/padded nodes):
         alpha = F.leaky_relu(alpha, self.negative_slope)
-        alpha = alpha.masked_fill(adj.unsqueeze(-1) == 0, float('-inf'))
+        edge_mask = adj.unsqueeze(-1) == 0
+        has_neighbor = ~edge_mask.all(dim=2, keepdim=True)
+        alpha = alpha.masked_fill(edge_mask & has_neighbor, float('-inf'))
         alpha = alpha.softmax(dim=2)
+        alpha = alpha * (~edge_mask).to(alpha.dtype)
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
 
         out = torch.matmul(alpha.movedim(3, 1), x.movedim(2, 1))

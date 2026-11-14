@@ -80,3 +80,9 @@ def test_tgn(neg_sampling_ratio):
     memory.reset_state()
     assert memory.memory.sum() == 0
     assert memory.last_update.sum() == 0
+
+    memory.train()
+    memory.eval()
+    empty_i = torch.empty(0, dtype=torch.long)
+    memory.update_state(empty_i, empty_i, empty_i, torch.empty((0, 16)))
+

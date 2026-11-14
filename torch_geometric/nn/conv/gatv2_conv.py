@@ -305,16 +305,32 @@ class GATv2Conv(MessagePassing):
         assert x_l is not None
         assert x_r is not None
 
+        x_pair: PairTensor = (x_l, x_r)
+
         if self.add_self_loops:
-            if isinstance(edge_index, Tensor):
+            if isinstance(edge_index, Tensor) and not is_torch_sparse_tensor(edge_index):
                 num_nodes = x_l.size(0)
                 if x_r is not None:
                     num_nodes = min(num_nodes, x_r.size(0))
                 edge_index, edge_attr = remove_self_loops(
                     edge_index, edge_attr)
-                edge_index, edge_attr = add_self_loops(
-                    edge_index, edge_attr, fill_value=self.fill_value,
-                    num_nodes=num_nodes)
+                if self.flow == 'target_to_source':
+                    edge_index, edge_attr = add_self_loops(
+                        edge_index.flip(0), edge_attr,
+                        fill_value=self.fill_value, num_nodes=num_nodes)
+                    edge_index = edge_index.flip(0)
+                else:
+                    edge_index, edge_attr = add_self_loops(
+                        edge_index, edge_attr, fill_value=self.fill_value,
+                        num_nodes=num_nodes)
+            elif is_torch_sparse_tensor(edge_index):
+                if self.edge_dim is None:
+                    edge_index, _ = add_self_loops(edge_index)
+                else:
+                    raise NotImplementedError(
+                        "The usage of 'edge_attr' and 'add_self_loops' "
+                        "simultaneously is currently not yet supported for "
+                        "'edge_index' in a 'SparseTensor' form")
             elif isinstance(edge_index, SparseTensor):
                 if self.edge_dim is None:
                     edge_index = torch_sparse.set_diag(edge_index)
@@ -325,11 +341,11 @@ class GATv2Conv(MessagePassing):
                         "'edge_index' in a 'SparseTensor' form")
 
         # edge_updater_type: (x: PairTensor, edge_attr: OptTensor)
-        alpha = self.edge_updater(edge_index, x=(x_l, x_r),
+        alpha = self.edge_updater(edge_index, x=x_pair,
                                   edge_attr=edge_attr)
 
         # propagate_type: (x: PairTensor, alpha: Tensor)
-        out = self.propagate(edge_index, x=(x_l, x_r), alpha=alpha)
+        out = self.propagate(edge_index, x=x_pair, alpha=alpha)
 
         if self.concat:
             out = out.view(-1, self.heads * self.out_channels)

@@ -77,24 +77,28 @@ def dense_mincut_pool(
     out = torch.matmul(s.transpose(1, 2), x)
     out_adj = torch.matmul(torch.matmul(s.transpose(1, 2), adj), s)
 
+    EPS = 1e-15
+
     # MinCut regularization.
     mincut_num = _rank3_trace(out_adj)
     d_flat = torch.einsum('ijk->ij', adj)
     d = _rank3_diag(d_flat)
     mincut_den = _rank3_trace(
         torch.matmul(torch.matmul(s.transpose(1, 2), d), s))
-    mincut_loss = -(mincut_num / mincut_den)
+    mincut_loss = -torch.where(
+        mincut_den > EPS,
+        mincut_num / mincut_den.clamp(min=EPS),
+        torch.zeros_like(mincut_num),
+    )
     mincut_loss = torch.mean(mincut_loss)
 
     # Orthogonality regularization.
     ss = torch.matmul(s.transpose(1, 2), s)
     i_s = torch.eye(k).type_as(ss)
     ortho_loss = torch.norm(
-        ss / torch.norm(ss, dim=(-1, -2), keepdim=True) -
+        ss / torch.norm(ss, dim=(-1, -2), keepdim=True).clamp(min=EPS) -
         i_s / torch.norm(i_s), dim=(-1, -2))
     ortho_loss = torch.mean(ortho_loss)
-
-    EPS = 1e-15
 
     # Fix and normalize coarsened adjacency matrix.
     ind = torch.arange(k, device=out_adj.device)

@@ -126,14 +126,19 @@ class DMoNPooling(torch.nn.Module):
         degrees_t = degrees.transpose(1, 2)  # B x 1 x N
 
         m = torch.einsum('ijk->i', degrees) / 2  # B
-        m_expand = m.view(-1, 1, 1).expand(-1, C, C)  # B x C x C
+        m_safe = m.clamp(min=EPS)
+        m_expand = m_safe.view(-1, 1, 1).expand(-1, C, C)  # B x C x C
 
         ca = torch.matmul(s.transpose(1, 2), degrees)  # B x C x 1
         cb = torch.matmul(degrees_t, s)  # B x 1 x C
 
         normalizer = torch.matmul(ca, cb) / 2 / m_expand
         decompose = out_adj - normalizer
-        spectral_loss = -_rank3_trace(decompose) / 2 / m
+        spectral_loss = torch.where(
+            m > EPS,
+            -_rank3_trace(decompose) / 2 / m_safe,
+            torch.zeros_like(m),
+        )
         spectral_loss = spectral_loss.mean()
 
         # Orthogonality regularization:

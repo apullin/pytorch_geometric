@@ -640,14 +640,13 @@ def add_remaining_self_loops(  # noqa: F811
 
         inv_mask = ~mask
         loop_nodes = edge_index[0][inv_mask]
-        if loop_nodes.numel() > 0:
-            has_loop = torch.zeros(N, dtype=torch.bool, device=device)
-            has_loop[loop_nodes] = True
-            loop_sum = scatter(edge_attr[inv_mask], loop_nodes, dim=0,
-                               dim_size=N, reduce='sum')
-            mask_shape: List[int] = [N] + [1] * (loop_attr.dim() - 1)
-            loop_attr = torch.where(has_loop.view(mask_shape), loop_sum,
-                                    loop_attr)
+        has_loop = torch.zeros(N, dtype=torch.bool, device=device)
+        has_loop.scatter_(0, loop_nodes, True)
+        loop_sum = scatter(edge_attr[inv_mask], loop_nodes, dim=0,
+                           dim_size=N, reduce='sum')
+        mask_shape: List[int] = [N] + [1] * (loop_attr.dim() - 1)
+        loop_attr = torch.where(has_loop.view(mask_shape), loop_sum,
+                                loop_attr)
 
         edge_attr = torch.cat([edge_attr[mask], loop_attr], dim=0)
 

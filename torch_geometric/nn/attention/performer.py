@@ -43,7 +43,7 @@ def linear_attention(q: Tensor, k: Tensor, v: Tensor) -> Tensor:
         \mathbf{\hat{D}}^{-1}(\mathbf{Q}'((\mathbf{K}')^{\top} \mathbf{V}))
 
     """
-    D_inv = 1.0 / (q @ k.sum(dim=-2).unsqueeze(-1))
+    D_inv = 1.0 / (q @ k.sum(dim=-2).unsqueeze(-1)).clamp(min=1e-6)
     kv = k.transpose(-2, -1) @ v
     qkv = q @ kv
     out = torch.einsum('...L,...Ld->...Ld', D_inv.squeeze(-1), qkv)
@@ -88,9 +88,17 @@ class PerformerProjection(torch.nn.Module):
         assert kernel is not None
         self.kernel = kernel
 
-    def forward(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
+    def forward(
+        self,
+        q: Tensor,
+        k: Tensor,
+        v: Tensor,
+        mask: Optional[Tensor] = None,
+    ) -> Tensor:
         q = generalized_kernel(q, self.projection_matrix, self.kernel)
         k = generalized_kernel(k, self.projection_matrix, self.kernel)
+        if mask is not None:
+            k = k.masked_fill(~mask, 0.)
         out = linear_attention(q, k, v)
         return out
 
@@ -163,13 +171,16 @@ class PerformerAttention(torch.nn.Module):
         q, k, v = map(
             lambda t: t.reshape(B, N, self.heads, self.head_channels).permute(
                 0, 2, 1, 3), (q, k, v))
+        mask_4d: Optional[Tensor] = None
         if mask is not None:
-            mask = mask[:, None, :, None]
-            v.masked_fill_(~mask, 0.)
-        out = self.fast_attn(q, k, v)
+            mask_4d = mask[:, None, :, None]
+            v = v.masked_fill(~mask_4d, 0.)
+        out = self.fast_attn(q, k, v, mask_4d)
         out = out.permute(0, 2, 1, 3).reshape(B, N, -1)
         out = self.attn_out(out)
         out = self.dropout(out)
+        if mask is not None:
+            out = out.masked_fill(~mask[:, :, None], 0.)
         return out
 
     @torch.no_grad()

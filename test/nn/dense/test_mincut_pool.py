@@ -28,3 +28,9 @@ def test_dense_mincut_pool():
         assert adj_jit.size() == (2, 10, 10)
         assert -1 <= mincut_loss <= 0
         assert 0 <= ortho_loss <= math.sqrt(2)
+
+    _, _, mc_zero, o_zero = dense_mincut_pool(
+        torch.randn(1, 4, 8), torch.zeros(1, 4, 4), torch.randn(1, 4, 2))
+    assert torch.isfinite(mc_zero) and mc_zero == 0.0
+    assert torch.isfinite(o_zero)
+

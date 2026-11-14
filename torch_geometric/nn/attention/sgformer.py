@@ -59,9 +59,6 @@ class SGFormerAttention(torch.nn.Module):
             lambda t: t.reshape(B, N, self.heads, self.head_channels),
             (qs, ks, vs))
 
-        if mask is not None:
-            mask = mask[:, :, None, None]
-            vs.masked_fill_(~mask, 0.)
         # replace 0's with epsilon
         epsilon = 1e-6
         qs[qs == 0] = epsilon
@@ -71,22 +68,33 @@ class SGFormerAttention(torch.nn.Module):
             lambda t: t / torch.linalg.norm(t, ord=2, dim=-1, keepdim=True),
             (qs, ks))
 
+        if mask is not None:
+            mask_4d = mask[:, :, None, None]
+            ks = ks.masked_fill(~mask_4d, 0.)
+            vs = vs.masked_fill(~mask_4d, 0.)
+            num_valid = mask.sum(dim=1).view(B, 1, 1, 1).to(vs.dtype).clamp(min=1.0)
+        else:
+            num_valid = float(N)
+
         # numerator
         kvs = torch.einsum("blhm,blhd->bhmd", ks, vs)
         attention_num = torch.einsum("bnhm,bhmd->bnhd", qs, kvs)
-        attention_num += N * vs
+        attention_num += num_valid * vs
 
         # denominator
-        all_ones = torch.ones([B, N]).to(ks.device)
+        all_ones = torch.ones([B, N], dtype=ks.dtype, device=ks.device)
         ks_sum = torch.einsum("blhm,bl->bhm", ks, all_ones)
         attention_normalizer = torch.einsum("bnhm,bhm->bnh", qs, ks_sum)
         # attentive aggregated results
         attention_normalizer = torch.unsqueeze(attention_normalizer,
                                                len(attention_normalizer.shape))
-        attention_normalizer += torch.ones_like(attention_normalizer) * N
+        attention_normalizer += num_valid
         attn_output = attention_num / attention_normalizer
 
-        return attn_output.mean(dim=2)
+        out = attn_output.mean(dim=2)
+        if mask is not None:
+            out = out.masked_fill(~mask[:, :, None], 0.)
+        return out
 
     def reset_parameters(self):
         self.q.reset_parameters()

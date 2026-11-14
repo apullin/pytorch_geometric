@@ -78,6 +78,8 @@ class ComplEx(KGEModel):
         rel_type: Tensor,
         tail_index: Tensor,
     ) -> Tensor:
+        if head_index.numel() == 0:
+            return self.node_emb.weight.sum() * 0.0
 
         pos_score = self(head_index, rel_type, tail_index)
         neg_score = self(*self.random_sample(head_index, rel_type, tail_index))

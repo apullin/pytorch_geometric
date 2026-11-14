@@ -64,3 +64,15 @@ def test_dense_gat_conv_with_broadcasting():
     assert conv(x, adj).size() == (batch_size, num_nodes, 64)
     mask = torch.tensor([1, 1, 1], dtype=torch.bool)
     assert conv(x, adj, mask).size() == (batch_size, num_nodes, 64)
+
+
+def test_dense_gat_conv_edgeless_no_loop():
+    conv = DenseGATConv(8, 8, heads=2).eval()
+    x = torch.randn(2, 4, 8, requires_grad=True)
+    adj = torch.zeros(2, 4, 4)
+    mask = torch.tensor([[True, True, True, True], [True, True, False, False]])
+    out = conv(x, adj, mask=mask, add_loop=False)
+    out.sum().backward()
+    assert torch.isfinite(out).all()
+    assert torch.isfinite(x.grad).all()
+

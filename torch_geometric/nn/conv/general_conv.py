@@ -156,7 +156,8 @@ class GeneralConv(MessagePassing):
         # propagate_type: (x: OptPairTensor, edge_attr: OptTensor)
         out = self.propagate(edge_index, x=x, size=size, edge_attr=edge_attr)
         out = out.mean(dim=1)  # todo: other approach to aggregate heads
-        out = out + self.lin_self(x_self)
+        if x_self is not None:
+            out = out + self.lin_self(x_self)
         if self.normalize_l2:
             out = F.normalize(out, p=2, dim=-1)
         return out

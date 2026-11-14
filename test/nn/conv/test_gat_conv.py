@@ -199,3 +199,16 @@ def test_gat_conv_empty_edge_index(device):
     conv = GATConv(8, 32, heads=2).to(device)
     out = conv(x, edge_index)
     assert out.size() == (0, 64)
+
+
+def test_gat_conv_flow():
+    x = torch.randn(5, 8)
+    edge_index = torch.tensor([[0, 0, 1, 2], [1, 3, 2, 4]])
+    edge_attr = torch.randn(4, 4)
+
+    conv1 = GATConv(8, 8, heads=2, edge_dim=4, flow='source_to_target').eval()
+    conv2 = GATConv(8, 8, heads=2, edge_dim=4, flow='target_to_source').eval()
+    conv2.load_state_dict(conv1.state_dict())
+    assert torch.allclose(conv1(x, edge_index, edge_attr),
+                          conv2(x, edge_index.flip(0), edge_attr), atol=1e-5)
+

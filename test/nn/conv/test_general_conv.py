@@ -40,3 +40,12 @@ def test_general_conv(kwargs):
     if torch_geometric.typing.WITH_TORCH_SPARSE:
         adj = SparseTensor.from_edge_index(edge_index, edge_attr, (4, 4))
         assert torch.allclose(conv(x, adj.t()), out, atol=1e-6)
+
+
+def test_general_conv_bipartite_none_dst():
+    conv = GeneralConv((8, 12), 16)
+    x_src = torch.randn(4, 8)
+    edge_index = torch.tensor([[0, 1, 2], [1, 3, 5]])
+    out = conv((x_src, None), edge_index, size=(4, 7))
+    assert out.size() == (7, 16)
+

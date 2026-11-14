@@ -116,9 +116,15 @@ class ChebConv(MessagePassing):
         dtype: Optional[int] = None,
         batch: OptTensor = None,
     ):
-        edge_index, edge_weight = get_laplacian(edge_index, edge_weight,
-                                                normalization, dtype,
-                                                num_nodes)
+        if self.flow == 'target_to_source':
+            edge_index, edge_weight = get_laplacian(edge_index.flip(0),
+                                                    edge_weight, normalization,
+                                                    dtype, num_nodes)
+            edge_index = edge_index.flip(0)
+        else:
+            edge_index, edge_weight = get_laplacian(edge_index, edge_weight,
+                                                    normalization, dtype,
+                                                    num_nodes)
         assert edge_weight is not None
 
         if lambda_max is None:

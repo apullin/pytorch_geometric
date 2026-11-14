@@ -119,14 +119,14 @@ def {{collect_name}}(
         assert len({{name[:-2]}}) == 2
         _{{name[:-2]}}_0, _{{name[:-2]}}_1 = {{name[:-2]}}[0], {{name[:-2]}}[1]
         if isinstance(_{{name[:-2]}}_0, Tensor):
-            self._set_size(size, 0, _{{name[:-2]}}_0)
+            self._set_size(size, j, _{{name[:-2]}}_0)
 {%- if name.endswith('_j') %}
             {{name}} = self._index_select(_{{name[:-2]}}_0, edge_index_{{name[-1]}})
         else:
             {{name}} = None
 {%- endif %}
         if isinstance(_{{name[:-2]}}_1, Tensor):
-            self._set_size(size, 1, _{{name[:-2]}}_1)
+            self._set_size(size, i, _{{name[:-2]}}_1)
 {%- if name.endswith('_i') %}
             {{name}} = self._index_select(_{{name[:-2]}}_1, edge_index_{{name[-1]}})
         else:

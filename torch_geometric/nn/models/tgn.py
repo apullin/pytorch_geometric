@@ -128,6 +128,9 @@ class TGNMemory(torch.nn.Module):
         self.last_update[n_id] = last_update
 
     def _get_updated_memory(self, n_id: Tensor) -> Tuple[Tensor, Tensor]:
+        if n_id.numel() == 0:
+            return self.memory[n_id], self.last_update[n_id]
+
         self._assoc[n_id] = torch.arange(n_id.size(0), device=n_id.device)
 
         # Compute messages (src -> dst).
@@ -140,6 +143,8 @@ class TGNMemory(torch.nn.Module):
 
         # Aggregate messages.
         idx = torch.cat([src_s, src_d], dim=0)
+        if idx.numel() == 0:
+            return self.memory[n_id], self.last_update[n_id]
         msg = torch.cat([msg_s, msg_d], dim=0)
         t = torch.cat([t_s, t_d], dim=0)
         aggr = self.aggr_module(msg, self._assoc[idx], t, n_id.size(0))

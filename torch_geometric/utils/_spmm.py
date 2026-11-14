@@ -34,6 +34,29 @@ def spmm(
     if reduce not in ['sum', 'mean', 'min', 'max']:
         raise ValueError(f"`reduce` argument '{reduce}' not supported")
 
+    if other.dim() > 2:
+        orig_shape = list(other.size())
+        num_src_nodes = orig_shape[-2]
+        feat_dim = orig_shape[-1]
+        if reduce in ['sum', 'mean']:
+            perm_other = torch.movedim(other, -2, 0).reshape(num_src_nodes, -1)
+            out_2d = _spmm_2d(src, perm_other, reduce=reduce)
+            out_shape = [out_2d.size(0)] + orig_shape[:-2] + [feat_dim]
+            return torch.movedim(out_2d.view(out_shape), 0, -2).contiguous()
+        else:
+            flat_other = other.reshape(-1, num_src_nodes, feat_dim)
+            outs = [_spmm_2d(src, flat_other[b], reduce=reduce)
+                    for b in range(flat_other.size(0))]
+            stacked = torch.stack(outs, dim=0)
+            return stacked.view(orig_shape[:-2] + [stacked.size(-2), feat_dim])
+
+    return _spmm_2d(src, other, reduce=reduce)
+
+def _spmm_2d(
+    src: Adj,
+    other: Tensor,
+    reduce: str = 'sum',
+) -> Tensor:
     if not torch.jit.is_scripting() and isinstance(src, EdgeIndex):
         return src.matmul(other=other, reduce=reduce)  # type: ignore
 
